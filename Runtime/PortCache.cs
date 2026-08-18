@@ -20,6 +20,7 @@ namespace SaintsGraph
             public NodePort.IO direction;
             public Node.ConnectionType connectionType;
             public Node.TypeConstraint typeConstraint;
+            public Node.ShowBackingValue backingValue;
             public bool dynamicPortList;
         }
 
@@ -63,6 +64,7 @@ namespace SaintsGraph
                     direction = input != null ? NodePort.IO.Input : NodePort.IO.Output,
                     connectionType = input?.connectionType ?? output.connectionType,
                     typeConstraint = input?.typeConstraint ?? output.typeConstraint,
+                    backingValue = input?.backingValue ?? output.backingValue,
                     dynamicPortList = input?.dynamicPortList ?? output.dynamicPortList
                 });
             }

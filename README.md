@@ -4,8 +4,8 @@ A node graph editor for Unity with an **xNode-compatible API**, a **UI Toolkit**
 first-class **[SaintsField](https://github.com/TylerTemp/SaintsField)** attribute support inside
 node bodies.
 
-> ⚠️ **Early development.** The runtime core is functional and tested; the graph editor window is
-> not implemented yet. The API may change until 1.0.
+> ⚠️ **Early development.** The runtime core is functional and tested and the editor window MVP
+> works (create/connect/move/delete nodes, undo, autosave). The API may change until 1.0.
 
 ## Why
 
@@ -76,7 +76,7 @@ public class AddNode : Node
 ## Roadmap
 
 - [x] Runtime core (xNode-shaped API, graph-level edges, tests)
-- [ ] Graph editor window (GraphView backend, UI Toolkit node bodies)
+- [x] Graph editor window MVP (GraphView backend, UI Toolkit node bodies, create/connect/undo)
 - [ ] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
 - [ ] JSON export / two-way sync for LLM- and diff-friendly graphs
 - [ ] Dynamic port lists, noodle styles, reroutes, preferences

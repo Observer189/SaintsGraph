@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Graph editor window (MVP): opens on double-clicking a `NodeGraph` asset. GraphView-backed
+  canvas with pan/zoom/selection, searchable create-node menu (`[CreateNodeMenu]`,
+  `[DisallowMultipleNodes]`), node bodies with serialized fields and inline ports
+  (`ShowBackingValue` honored), connect/disconnect with type constraints, move, delete
+  (`[RequireNode]` guard), undo/redo, sub-asset persistence and autosave.
+- Public editor extension API without GraphView types: `SaintsNodeEditor`
+  (`[CustomNodeEditor]`: header/body `VisualElement` factories, tint, width, tooltip) and
+  `SaintsGraphEditor` (`[CustomNodeGraphEditor]`: menu names, `CanConnect`, `CanRemove`,
+  node lifecycle, port/type colors).
+
 - Runtime core with an xNode-shaped API: `Node`, `NodeGraph`, `NodePort`,
   `[Input]`/`[Output]`, `[CreateNodeMenu]`, `[NodeTint]`, `[NodeWidth]`,
   `[DisallowMultipleNodes]`, `[RequireNode]`, `[PortTypeOverride]`, `[NodeEnum]`.

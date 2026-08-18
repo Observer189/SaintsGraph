@@ -1,0 +1,31 @@
+GridBackground {
+    --grid-background-color: #1e1e1e;
+    --line-color: rgba(200, 200, 200, 0.05);
+    --thick-line-color: rgba(200, 200, 200, 0.09);
+    --spacing: 16;
+}
+
+.saints-node-body {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    background-color: rgba(46, 46, 46, 0.9);
+}
+
+.saints-port-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.saints-port-row .unity-label {
+    min-width: 50px;
+}
+
+.saints-port-row .unity-base-field__label {
+    min-width: 60px;
+    width: 60px;
+}
+
+.saints-node-body > .unity-property-field {
+    margin-left: 16px;
+    margin-right: 16px;
+}
