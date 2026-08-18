@@ -29,3 +29,8 @@ GridBackground {
     margin-left: 16px;
     margin-right: 16px;
 }
+
+.saints-node-body .unity-base-field__label {
+    min-width: 60px;
+}
+

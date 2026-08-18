@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
@@ -8,7 +9,12 @@ using GraphViewNode = UnityEditor.Experimental.GraphView.Node;
 
 namespace SaintsGraph.Editor
 {
-    /// <summary>View of one node: title with tint, body with serialized fields and inline ports.</summary>
+    /// <summary>
+    /// View of one node: title with tint, body with serialized fields and inline ports.
+    /// The body comes from the node editor's CreateBody override, the registered
+    /// <see cref="INodeBodyBuilder"/> (SaintsField integration), or the built-in
+    /// PropertyField loop — port pills are then attached onto the matching field rows.
+    /// </summary>
     internal class SaintsNodeView : GraphViewNode
     {
         public readonly Node target;
@@ -17,6 +23,7 @@ namespace SaintsGraph.Editor
 
         private readonly SerializedObject _serializedObject;
         private readonly SaintsGraphView _graphView;
+        private Action _bodyTeardown;
 
         public SaintsNodeView(Node target, SaintsGraphView graphView, SaintsGraphEditor graphEditor)
         {
@@ -59,29 +66,49 @@ namespace SaintsGraph.Editor
             mainContainer.Bind(_serializedObject);
         }
 
+        /// <summary>Releases body resources (e.g. SaintsField renderers). Called before the view is discarded.</summary>
+        public void Teardown()
+        {
+            Action teardown = _bodyTeardown;
+            _bodyTeardown = null;
+            teardown?.Invoke();
+        }
+
         private void BuildBody()
         {
-            VisualElement body = editor.CreateBody();
-            if (body == null)
-            {
-                body = BuildDefaultBody();
-            }
-
-            body.AddToClassList("saints-node-body");
-
-            // Ports the body did not place (dynamic ports; all ports for custom bodies).
+            List<string> skipFields = new List<string> { "m_Script", "graph", "position", "dynamicPorts" };
             foreach (NodePort port in target.Ports)
             {
-                if (!portViews.ContainsKey(port.fieldName))
+                if (port.IsStatic && !ShowsBackingField(port))
                 {
-                    body.Add(MakePortRow(port, null));
+                    skipFields.Add(port.fieldName);
                 }
             }
 
+            VisualElement body = editor.CreateBody();
+            if (body == null && NodeBodyBuilderRegistry.builder != null)
+            {
+                body = NodeBodyBuilderRegistry.builder.Build(editor, skipFields, out _bodyTeardown);
+            }
+
+            if (body == null)
+            {
+                body = BuildDefaultBody(skipFields);
+            }
+
+            body.AddToClassList("saints-node-body");
+            AttachPortPills(body);
             extensionContainer.Add(body);
         }
 
-        private VisualElement BuildDefaultBody()
+        private bool ShowsBackingField(NodePort port)
+        {
+            Node.ShowBackingValue backing = NodeEditorUtilities.GetBackingValue(target, port.fieldName);
+            return backing == Node.ShowBackingValue.Always
+                   || (backing == Node.ShowBackingValue.Unconnected && !port.IsConnected);
+        }
+
+        private VisualElement BuildDefaultBody(ICollection<string> skipFields)
         {
             VisualElement container = new VisualElement();
             SerializedProperty property = _serializedObject.GetIterator();
@@ -89,32 +116,37 @@ namespace SaintsGraph.Editor
             {
                 do
                 {
-                    if (property.name == "m_Script" || property.name == "graph"
-                        || property.name == "position" || property.name == "dynamicPorts")
+                    if (skipFields.Contains(property.name))
                     {
                         continue;
                     }
 
-                    NodePort port = target.GetPort(property.name);
-                    if (port == null)
-                    {
-                        container.Add(new PropertyField(property.Copy()));
-                    }
-                    else
-                    {
-                        container.Add(MakePortRow(port, property.Copy()));
-                    }
+                    container.Add(new PropertyField(property.Copy()));
                 } while (property.NextVisible(false));
             }
 
             return container;
         }
 
-        private VisualElement MakePortRow(NodePort port, SerializedProperty property)
+        private void AttachPortPills(VisualElement body)
         {
-            VisualElement row = new VisualElement();
-            row.AddToClassList("saints-port-row");
+            foreach (NodePort port in target.Ports)
+            {
+                Port pill = MakePortPill(port);
+                VisualElement anchor = FindBoundElement(body, port.fieldName);
+                if (anchor != null)
+                {
+                    WrapWithPill(anchor, pill, port.IsInput);
+                }
+                else
+                {
+                    body.Add(MakeLabelRow(port, pill));
+                }
+            }
+        }
 
+        private Port MakePortPill(NodePort port)
+        {
             Port view = Port.Create<Edge>(Orientation.Horizontal,
                 port.IsInput ? Direction.Input : Direction.Output,
                 port.connectionType == Node.ConnectionType.Multiple ? Port.Capacity.Multi : Port.Capacity.Single,
@@ -123,43 +155,58 @@ namespace SaintsGraph.Editor
             view.userData = port;
             view.portColor = _graphView.graphEditor.GetPortColor(port);
             portViews[port.fieldName] = view;
+            return view;
+        }
 
-            string niceName = ObjectNames.NicifyVariableName(port.fieldName);
-            Node.ShowBackingValue backing = port.IsStatic
-                ? NodeEditorUtilities.GetBackingValue(target, port.fieldName)
-                : Node.ShowBackingValue.Never;
-            bool showField = property != null
-                             && (backing == Node.ShowBackingValue.Always
-                                 || (backing == Node.ShowBackingValue.Unconnected && !port.IsConnected));
+        private static VisualElement FindBoundElement(VisualElement body, string fieldName)
+        {
+            return body.Query<VisualElement>()
+                .Where(element => element is IBindable bindable && bindable.bindingPath == fieldName)
+                .First();
+        }
 
-            VisualElement content;
-            if (showField)
+        private static void WrapWithPill(VisualElement anchor, Port pill, bool isInput)
+        {
+            VisualElement parent = anchor.parent;
+            int index = parent.IndexOf(anchor);
+            VisualElement row = new VisualElement();
+            row.AddToClassList("saints-port-row");
+            anchor.RemoveFromHierarchy();
+            anchor.style.flexGrow = 1;
+            if (isInput)
             {
-                PropertyField field = new PropertyField(property, niceName);
-                field.style.flexGrow = 1;
-                content = field;
+                row.Add(pill);
+                row.Add(anchor);
             }
             else
             {
-                Label label = new Label(niceName);
-                label.style.flexGrow = 1;
-                if (port.IsOutput)
-                {
-                    label.style.unityTextAlign = TextAnchor.MiddleRight;
-                }
+                row.Add(anchor);
+                row.Add(pill);
+            }
 
-                content = label;
+            parent.Insert(index, row);
+        }
+
+        private static VisualElement MakeLabelRow(NodePort port, Port pill)
+        {
+            VisualElement row = new VisualElement();
+            row.AddToClassList("saints-port-row");
+            Label label = new Label(ObjectNames.NicifyVariableName(port.fieldName));
+            label.style.flexGrow = 1;
+            if (port.IsOutput)
+            {
+                label.style.unityTextAlign = TextAnchor.MiddleRight;
             }
 
             if (port.IsInput)
             {
-                row.Add(view);
-                row.Add(content);
+                row.Add(pill);
+                row.Add(label);
             }
             else
             {
-                row.Add(content);
-                row.Add(view);
+                row.Add(label);
+                row.Add(pill);
             }
 
             return row;

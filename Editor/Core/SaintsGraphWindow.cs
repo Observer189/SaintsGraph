@@ -92,6 +92,7 @@ namespace SaintsGraph.Editor
                 return;
             }
 
+            _view?.TeardownNodeViews();
             _viewContainer.Clear();
             _view = null;
             if (graph == null)

@@ -77,7 +77,7 @@ public class AddNode : Node
 
 - [x] Runtime core (xNode-shaped API, graph-level edges, tests)
 - [x] Graph editor window MVP (GraphView backend, UI Toolkit node bodies, create/connect/undo)
-- [ ] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
+- [x] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
 - [ ] JSON export / two-way sync for LLM- and diff-friendly graphs
 - [ ] Dynamic port lists, noodle styles, reroutes, preferences
 - [ ] xNode asset migration tool, samples, CI, OpenUPM

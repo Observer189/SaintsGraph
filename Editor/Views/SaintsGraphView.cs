@@ -58,10 +58,20 @@ namespace SaintsGraph.Editor
             Reload();
         }
 
+        /// <summary>Releases per-node body resources. Call before discarding this view.</summary>
+        public void TeardownNodeViews()
+        {
+            foreach (SaintsNodeView view in _nodeViews.Values)
+            {
+                view.Teardown();
+            }
+        }
+
         /// <summary>Rebuilds all views from the model. The model is always the source of truth.</summary>
         public void Reload()
         {
             _reloading = true;
+            TeardownNodeViews();
             DeleteElements(graphElements.ToList());
             _nodeViews.Clear();
             graph.PruneInvalidEdges();

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SaintsField integration assembly (`SaintsGraph.Editor.SaintsFieldSupport`): when the
+  SaintsField package (≥ 5.25.0) is installed, node bodies are rendered through
+  SaintsField's member-renderer engine — `[Button]`, `[ShowIf]`, layout groups,
+  `[ShowInInspector]` and the rest of the SaintsEditor feature set work inside nodes.
+  Auto-enabled via version defines; opt out with `SAINTSGRAPH_SAINTSFIELD_DISABLE`.
+  Core gains a pluggable `INodeBodyBuilder` hook and unified port-pill attachment that
+  works with any body (custom, SaintsField, built-in).
+
 - Graph editor window (MVP): opens on double-clicking a `NodeGraph` asset. GraphView-backed
   canvas with pan/zoom/selection, searchable create-node menu (`[CreateNodeMenu]`,
   `[DisallowMultipleNodes]`), node bodies with serialized fields and inline ports
