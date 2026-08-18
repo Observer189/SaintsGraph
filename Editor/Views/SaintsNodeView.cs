@@ -24,6 +24,7 @@ namespace SaintsGraph.Editor
         private readonly SerializedObject _serializedObject;
         private readonly SaintsGraphView _graphView;
         private readonly Dictionary<string, VisualElement> _portRows = new Dictionary<string, VisualElement>();
+        private List<PortCache.PortTemplate> _listTemplates = new List<PortCache.PortTemplate>();
         private Action _bodyTeardown;
         private bool _bodyBuilt;
 
@@ -143,7 +144,20 @@ namespace SaintsGraph.Editor
             // Port fields are NOT skipped: the builder places them at their natural position,
             // and hidden backing values are then replaced with a label row in place —
             // otherwise a connected port's row would jump to the end of the body.
+            // Backing fields of dynamic port lists ARE skipped: they render as custom
+            // list blocks with one port per element.
             List<string> skipFields = new List<string> { "m_Script", "graph", "position", "dynamicPorts" };
+            _listTemplates = new List<PortCache.PortTemplate>();
+            foreach (PortCache.PortTemplate template in PortCache.GetTemplates(target.GetType()))
+            {
+                if (template.dynamicPortList)
+                {
+                    _listTemplates.Add(template);
+                    skipFields.Add(template.fieldName);
+                }
+            }
+
+            SyncDynamicLists();
 
             VisualElement body = editor.CreateBody();
             if (body == null && NodeBodyBuilderRegistry.builder != null)
@@ -178,6 +192,13 @@ namespace SaintsGraph.Editor
                 {
                     if (skipFields.Contains(property.name))
                     {
+                        // Dynamic port lists keep their declared position via a placeholder
+                        // that the list block replaces.
+                        if (IsDynamicListField(property.name))
+                        {
+                            container.Add(new VisualElement { name = "saints-dpl-" + property.name });
+                        }
+
                         continue;
                     }
 
@@ -190,8 +211,30 @@ namespace SaintsGraph.Editor
 
         private void AttachPortPills(VisualElement body)
         {
+            foreach (PortCache.PortTemplate template in _listTemplates)
+            {
+                VisualElement block = BuildDynamicListBlock(template);
+                VisualElement placeholder = body.Q<VisualElement>("saints-dpl-" + template.fieldName);
+                if (placeholder != null)
+                {
+                    VisualElement parent = placeholder.parent;
+                    int index = parent.IndexOf(placeholder);
+                    placeholder.RemoveFromHierarchy();
+                    parent.Insert(index, block);
+                }
+                else
+                {
+                    body.Add(block);
+                }
+            }
+
             foreach (NodePort port in target.Ports)
             {
+                if (_portRows.ContainsKey(port.fieldName))
+                {
+                    continue; // already placed by a dynamic list block
+                }
+
                 if (!portViews.TryGetValue(port.fieldName, out Port pill))
                 {
                     pill = MakePortPill(port);
@@ -289,6 +332,212 @@ namespace SaintsGraph.Editor
             VisualElement row = MakeLabelRow(port, pill);
             parent.Insert(index, row);
             return row;
+        }
+
+        private bool IsDynamicListField(string fieldName)
+        {
+            foreach (PortCache.PortTemplate template in _listTemplates)
+            {
+                if (template.fieldName == fieldName)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void SyncDynamicLists()
+        {
+            bool recorded = false;
+            foreach (PortCache.PortTemplate template in _listTemplates)
+            {
+                SerializedProperty listProperty = _serializedObject.FindProperty(template.fieldName);
+                if (listProperty == null || !listProperty.isArray
+                    || listProperty.propertyType != SerializedPropertyType.Generic)
+                {
+                    continue;
+                }
+
+                if (DynamicPortListOps.CountElements(target, template.fieldName) == listProperty.arraySize)
+                {
+                    continue;
+                }
+
+                if (!recorded)
+                {
+                    Undo.RecordObject(target, "Sync Dynamic Ports");
+                    Undo.RecordObject(_graphView.graph, "Sync Dynamic Ports");
+                    recorded = true;
+                }
+
+                DynamicPortListOps.Sync(target, template, listProperty.arraySize);
+            }
+
+            if (recorded)
+            {
+                EditorUtility.SetDirty(target);
+                EditorUtility.SetDirty(_graphView.graph);
+            }
+        }
+
+        private VisualElement BuildDynamicListBlock(PortCache.PortTemplate template)
+        {
+            string fieldName = template.fieldName;
+            SerializedProperty listProperty = _serializedObject.FindProperty(fieldName);
+            bool hasBacking = listProperty != null && listProperty.isArray
+                              && listProperty.propertyType == SerializedPropertyType.Generic;
+
+            VisualElement block = new VisualElement();
+            block.AddToClassList("saints-dynamic-list");
+
+            VisualElement header = new VisualElement();
+            header.AddToClassList("saints-dynamic-list__header");
+            Label title = new Label(ObjectNames.NicifyVariableName(fieldName));
+            title.style.flexGrow = 1;
+            header.Add(title);
+            Button addButton = new Button(() => AddListElement(template)) { text = "+" };
+            addButton.AddToClassList("saints-dynamic-list__button");
+            header.Add(addButton);
+            block.Add(header);
+
+            int count = DynamicPortListOps.CountElements(target, fieldName);
+            for (int i = 0; i < count; i++)
+            {
+                block.Add(BuildDynamicListRow(template, listProperty, hasBacking, i, count));
+            }
+
+            return block;
+        }
+
+        private VisualElement BuildDynamicListRow(PortCache.PortTemplate template, SerializedProperty listProperty,
+            bool hasBacking, int index, int count)
+        {
+            string portName = DynamicPortListOps.ElementName(template.fieldName, index);
+            VisualElement row = new VisualElement();
+            row.AddToClassList("saints-port-row");
+
+            NodePort port = target.GetPort(portName);
+            if (port == null)
+            {
+                return row;
+            }
+
+            if (!portViews.TryGetValue(portName, out Port pill))
+            {
+                pill = MakePortPill(port);
+            }
+
+            pill.portName = "";
+            pill.style.display = DisplayStyle.Flex;
+
+            bool showField = hasBacking && index < listProperty.arraySize
+                             && (template.backingValue == Node.ShowBackingValue.Always
+                                 || (template.backingValue == Node.ShowBackingValue.Unconnected && !port.IsConnected));
+
+            VisualElement content;
+            if (showField)
+            {
+                PropertyField field = new PropertyField(listProperty.GetArrayElementAtIndex(index), "Element " + index);
+                field.style.flexGrow = 1;
+                content = field;
+            }
+            else
+            {
+                Label label = new Label("Element " + index);
+                label.style.flexGrow = 1;
+                if (port.IsOutput)
+                {
+                    label.style.unityTextAlign = TextAnchor.MiddleRight;
+                }
+
+                content = label;
+            }
+
+            Button up = new Button(() => MoveListElement(template, index, index - 1)) { text = "▲" };
+            up.SetEnabled(index > 0);
+            Button down = new Button(() => MoveListElement(template, index, index + 1)) { text = "▼" };
+            down.SetEnabled(index < count - 1);
+            Button remove = new Button(() => RemoveListElement(template, index)) { text = "✕" };
+            up.AddToClassList("saints-dynamic-list__button");
+            down.AddToClassList("saints-dynamic-list__button");
+            remove.AddToClassList("saints-dynamic-list__button");
+
+            if (port.IsInput)
+            {
+                row.Add(pill);
+                row.Add(content);
+                row.Add(up);
+                row.Add(down);
+                row.Add(remove);
+            }
+            else
+            {
+                row.Add(up);
+                row.Add(down);
+                row.Add(remove);
+                row.Add(content);
+                row.Add(pill);
+            }
+
+            _portRows[portName] = row;
+            return row;
+        }
+
+        private void AddListElement(PortCache.PortTemplate template)
+        {
+            Undo.RecordObject(target, "Add Port Element");
+            SerializedProperty listProperty = _serializedObject.FindProperty(template.fieldName);
+            if (listProperty != null && listProperty.isArray
+                && listProperty.propertyType == SerializedPropertyType.Generic)
+            {
+                listProperty.arraySize++;
+                _serializedObject.ApplyModifiedProperties();
+            }
+
+            DynamicPortListOps.AddElement(target, template);
+            AfterListEdit();
+        }
+
+        private void RemoveListElement(PortCache.PortTemplate template, int index)
+        {
+            Undo.RecordObject(target, "Remove Port Element");
+            Undo.RecordObject(_graphView.graph, "Remove Port Element");
+            DynamicPortListOps.RemoveElement(target, template.fieldName, index);
+            SerializedProperty listProperty = _serializedObject.FindProperty(template.fieldName);
+            if (listProperty != null && listProperty.isArray
+                && listProperty.propertyType == SerializedPropertyType.Generic
+                && index < listProperty.arraySize)
+            {
+                listProperty.DeleteArrayElementAtIndex(index);
+                _serializedObject.ApplyModifiedProperties();
+            }
+
+            AfterListEdit();
+        }
+
+        private void MoveListElement(PortCache.PortTemplate template, int from, int to)
+        {
+            Undo.RecordObject(target, "Move Port Element");
+            Undo.RecordObject(_graphView.graph, "Move Port Element");
+            SerializedProperty listProperty = _serializedObject.FindProperty(template.fieldName);
+            if (listProperty != null && listProperty.isArray
+                && listProperty.propertyType == SerializedPropertyType.Generic
+                && from < listProperty.arraySize && to >= 0 && to < listProperty.arraySize)
+            {
+                listProperty.MoveArrayElement(from, to);
+                _serializedObject.ApplyModifiedProperties();
+            }
+
+            DynamicPortListOps.MoveElement(target, template.fieldName, from, to);
+            AfterListEdit();
+        }
+
+        private void AfterListEdit()
+        {
+            EditorUtility.SetDirty(target);
+            EditorUtility.SetDirty(_graphView.graph);
+            _graphView.ScheduleReload();
         }
 
         private Port MakePortPill(NodePort port)

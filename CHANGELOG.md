@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dynamic port lists (`[Input(dynamicPortList: true)]` / `[Output(...)]` on array or
+  `List<T>` fields), following xNode's `"{field} {index}"` convention: the node renders
+  a list block with one port per element, add/move/remove buttons keep the backing list
+  and ports in lockstep, connections follow elements on reorder and shift down on
+  removal. Element-port metadata (type, direction, constraints) refreshes from the
+  backing field's attribute on `UpdatePorts`, the backing field itself no longer gets a
+  port, and port counts self-heal against external backing-list edits (e.g. JSON sidecar
+  imports).
+
 - Cycle detection in the editor: nodes participating in a cycle (including self-loops)
   get a red border and a warning tooltip, updated on every graph change. The runtime
   still allows cycles for xNode parity — this is a visual guard against the infinite

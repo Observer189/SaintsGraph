@@ -214,6 +214,13 @@ namespace SaintsGraph
             _ports = new Dictionary<string, NodePort>();
             foreach (PortCache.PortTemplate template in PortCache.GetTemplates(GetType()))
             {
+                // A dynamicPortList field has no port of its own — it spawns
+                // per-element dynamic ports named "{field} {index}".
+                if (template.dynamicPortList)
+                {
+                    continue;
+                }
+
                 _ports[template.fieldName] = new NodePort(template, this);
             }
 
@@ -227,8 +234,19 @@ namespace SaintsGraph
                 Type type = string.IsNullOrEmpty(data.typeQualifiedName)
                     ? null
                     : Type.GetType(data.typeQualifiedName, false);
-                _ports[data.fieldName] =
+                NodePort port =
                     new NodePort(data.fieldName, type, data.direction, data.connectionType, data.typeConstraint, this);
+                // Element ports of a dynamic port list take their metadata from the backing
+                // field's attribute, so attribute edits propagate to existing ports.
+                if (PortCache.TryGetDynamicListTemplate(GetType(), data.fieldName, out PortCache.PortTemplate listTemplate))
+                {
+                    port.ValueType = PortCache.GetListElementType(listTemplate.valueType);
+                    port.direction = listTemplate.direction;
+                    port.connectionType = listTemplate.connectionType;
+                    port.typeConstraint = listTemplate.typeConstraint;
+                }
+
+                _ports[data.fieldName] = port;
             }
         }
 

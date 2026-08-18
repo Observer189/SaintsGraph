@@ -73,6 +73,57 @@ namespace SaintsGraph
             return templates;
         }
 
+        /// <summary>T[] and List&lt;T&gt; → T; anything else unchanged. Element type of dynamic port list fields.</summary>
+        public static Type GetListElementType(Type type)
+        {
+            if (type == null)
+            {
+                return null;
+            }
+
+            if (type.IsArray)
+            {
+                return type.GetElementType();
+            }
+
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+            {
+                return type.GetGenericArguments()[0];
+            }
+
+            return type;
+        }
+
+        /// <summary>
+        /// Matches xNode's dynamic port list naming convention "{fieldName} {index}":
+        /// true when the port name parses as an element of a [Input/Output(dynamicPortList: true)] field.
+        /// </summary>
+        public static bool TryGetDynamicListTemplate(Type nodeType, string portName, out PortTemplate template)
+        {
+            template = null;
+            if (string.IsNullOrEmpty(portName))
+            {
+                return false;
+            }
+
+            string[] parts = portName.Split(' ');
+            if (parts.Length != 2 || !int.TryParse(parts[1], out _))
+            {
+                return false;
+            }
+
+            foreach (PortTemplate candidate in GetTemplates(nodeType))
+            {
+                if (candidate.dynamicPortList && candidate.fieldName == parts[0])
+                {
+                    template = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// All instance fields of a node type, including private fields inherited from base classes
         /// (which <see cref="Type.GetFields()"/> alone would miss).
