@@ -373,7 +373,7 @@ namespace SaintsGraph.Editor
         }
 
         /// <summary>{"instanceID": n} → "$ref:guid:localId" (or null for none/unpersistable).</summary>
-        private static JsonValue ObjectRefsToStrings(JsonValue value)
+        internal static JsonValue ObjectRefsToStrings(JsonValue value)
         {
             switch (value)
             {

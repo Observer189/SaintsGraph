@@ -19,5 +19,12 @@
   },
   "license": "MIT",
   "documentationUrl": "https://github.com/Observer189/SaintsGraph#readme",
-  "changelogUrl": "https://github.com/Observer189/SaintsGraph/blob/main/CHANGELOG.md"
+  "changelogUrl": "https://github.com/Observer189/SaintsGraph/blob/main/CHANGELOG.md",
+  "samples": [
+    {
+      "displayName": "Math Graph",
+      "description": "A small math graph: value, add, multiply, dynamic port list, result node, and a runner component.",
+      "path": "Samples~/MathGraph"
+    }
+  ]
 }

@@ -73,6 +73,23 @@ public class AddNode : Node
 }
 ```
 
+## Migrating from xNode
+
+Code migration is a `using` swap: change `using XNode;` to `using SaintsGraph;` in your node
+and graph classes. Attribute and member names match, so the rest of the class stays as it is.
+
+Assets migrate through the JSON sidecar, which is written while xNode is still installed:
+
+1. **Before changing any code**, right-click an xNode graph asset →
+   **SaintsGraph → Migrate xNode Graph** (or **Tools → SaintsGraph → Migrate All xNode Graphs**).
+   This writes `<Graph>.graph.json` next to each asset: nodes, positions, field values,
+   dynamic ports and connections.
+2. Switch your classes to `using SaintsGraph;`.
+3. Create a new graph asset with the same name in the same folder as the JSON (the old xNode
+   asset can then be deleted), right-click it → **SaintsGraph → Import Graph JSON**.
+
+The migration assembly only compiles while xNode is installed, and disappears with it.
+
 ## JSON sidecar
 
 `Assets → SaintsGraph → Export Graph JSON` writes a readable `MyGraph.graph.json` next to the
@@ -102,8 +119,11 @@ changes show up as readable diffs in version control.
 - [x] Graph editor window MVP (GraphView backend, UI Toolkit node bodies, create/connect/undo)
 - [x] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
 - [x] JSON sidecar v1 (export/import commands, auto-export on save)
-- [ ] Dynamic port lists, noodle styles, reroutes, preferences
-- [ ] xNode asset migration tool, samples, CI, OpenUPM
+- [x] Dynamic port lists, lazy node bodies, cycle highlighting
+- [x] xNode asset migration tool, sample, package validation CI
+- [ ] Noodle styles, reroute points, preferences window
+- [ ] Copy/paste, drag-reorder for port lists, persisted collapse state
+- [ ] OpenUPM release
 
 See [Docs~/DESIGN.md](Docs~/DESIGN.md) for the architecture.
 

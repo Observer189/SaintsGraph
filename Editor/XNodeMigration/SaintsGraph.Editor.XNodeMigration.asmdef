@@ -1,0 +1,29 @@
+{
+    "name": "SaintsGraph.Editor.XNodeMigration",
+    "rootNamespace": "SaintsGraph.Editor.XNodeMigration",
+    "references": [
+        "SaintsGraph",
+        "SaintsGraph.Editor",
+        "XNode"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "SAINTSGRAPH_XNODE",
+        "!SAINTSGRAPH_XNODE_DISABLE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.github.siccity.xnode",
+            "expression": "1.0.0",
+            "define": "SAINTSGRAPH_XNODE"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- xNode asset migration: `Assets → SaintsGraph → Migrate xNode Graph` (and a Tools command
+  for all graphs at once) converts an xNode graph into a SaintsGraph JSON sidecar — nodes,
+  positions, field values, asset references, dynamic ports and connections — which is then
+  imported onto a SaintsGraph asset after re-basing the node classes. Lives in a satellite
+  assembly that only compiles while xNode is installed
+  (`SAINTSGRAPH_XNODE_DISABLE` opts out).
+- `Math Graph` sample: graph type, value/add/multiply nodes, a dynamic port list, a result
+  node and a runner component showing evaluation from gameplay code.
+- Package validation CI: checks that `package.json` and every `.asmdef` parse, assembly
+  names are unique, sample paths exist and no asset is missing its `.meta`.
+
 - Dynamic port lists (`[Input(dynamicPortList: true)]` / `[Output(...)]` on array or
   `List<T>` fields), following xNode's `"{field} {index}"` convention: the node renders
   a list block with one port per element, add/move/remove buttons keep the backing list
