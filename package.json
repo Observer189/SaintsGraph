@@ -1,0 +1,23 @@
+{
+  "name": "com.observer189.saintsgraph",
+  "version": "0.1.0",
+  "displayName": "SaintsGraph",
+  "description": "Node graph editor for Unity with an xNode-compatible API, a UI Toolkit editor and first-class SaintsField attribute support in node bodies. LLM-friendly JSON export of graphs.",
+  "unity": "6000.0",
+  "keywords": [
+    "node",
+    "graph",
+    "editor",
+    "xnode",
+    "saintsfield",
+    "uitoolkit",
+    "graphview"
+  ],
+  "author": {
+    "name": "Observer189",
+    "url": "https://github.com/Observer189"
+  },
+  "license": "MIT",
+  "documentationUrl": "https://github.com/Observer189/SaintsGraph#readme",
+  "changelogUrl": "https://github.com/Observer189/SaintsGraph/blob/main/CHANGELOG.md"
+}

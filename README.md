@@ -1,0 +1,96 @@
+# SaintsGraph
+
+A node graph editor for Unity with an **xNode-compatible API**, a **UI Toolkit** editor and
+first-class **[SaintsField](https://github.com/TylerTemp/SaintsField)** attribute support inside
+node bodies.
+
+> ⚠️ **Early development.** The runtime core is functional and tested; the graph editor window is
+> not implemented yet. The API may change until 1.0.
+
+## Why
+
+[xNode](https://github.com/Siccity/xNode) has a wonderfully small API, but its editor is IMGUI and
+the project is dormant. SaintsGraph keeps the API you already know and rebuilds everything else:
+
+- **xNode-shaped API** — `Node`, `NodeGraph`, `NodePort`, `[Input]`/`[Output]`,
+  `[CreateNodeMenu]`, `[NodeTint]`, `[NodeWidth]`, `[DisallowMultipleNodes]`, `[RequireNode]`,
+  `[PortTypeOverride]`, `[NodeEnum]`. Porting existing node code is a `using XNode;` →
+  `using SaintsGraph;` swap for most projects.
+- **UI Toolkit editor** (GraphView-based, behind an isolation layer) — planned, in progress.
+- **SaintsField attributes in nodes** — SaintsField property drawers work out of the box; with the
+  optional integration assembly, node bodies are rendered through SaintsField's engine, enabling
+  `[Button]`, `[ShowIf]`, layout groups and friends inside nodes. SaintsField remains an optional
+  dependency: without it everything still works with plain property fields.
+- **LLM/human-friendly graphs** — a clean serialized model (single edge list per graph instead of
+  xNode's mirrored per-port connections) plus a planned JSON export/import side file, so graphs can
+  be reviewed in PRs and edited by tools or LLMs.
+
+## What is intentionally different from xNode
+
+The public API matches; the internals do not:
+
+- Connections are stored **once, at graph level** (`NodeGraph.Edges`), not mirrored on both ports.
+  The whole class of "connection lists out of sync" bugs is gone.
+- Ports are rebuilt **lazily per type** — no assembly scanning, and no silent loss of ports for
+  assemblies whose name starts with `Unity`, as in xNode.
+- Hiding `OnEnable` in a node subclass no longer breaks ports (only your `Init()` would be skipped —
+  still don't do it).
+- `OnCreateConnection(from, to)` receives normalized arguments on **both** nodes: `from` is always
+  the output port, `to` always the input port.
+- Auto-named dynamic ports are direction-aware (`dynamicOutput_0`, not xNode's `dynamicInput_0`
+  for outputs).
+- `.asset` files are **not** binary-compatible with xNode. A migration tool is planned; the
+  intended migration path for code is switching the base class, for assets — the converter.
+- Obsolete xNode aliases (`InstancePorts`, `AddInstanceInput`, ...) are not carried over.
+
+## Install
+
+Unity **6000.0+**. In Package Manager: *Add package from git URL*:
+
+```
+https://github.com/Observer189/SaintsGraph.git
+```
+
+## Quick example
+
+```csharp
+using SaintsGraph;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Graphs/Math Graph")]
+public class MathGraph : NodeGraph { }
+
+public class AddNode : Node
+{
+    [Input] public float a;
+    [Input] public float b;
+    [Output] public float result;
+
+    public override object GetValue(NodePort port)
+    {
+        return GetInputValue("a", a) + GetInputValue("b", b);
+    }
+}
+```
+
+## Roadmap
+
+- [x] Runtime core (xNode-shaped API, graph-level edges, tests)
+- [ ] Graph editor window (GraphView backend, UI Toolkit node bodies)
+- [ ] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
+- [ ] JSON export / two-way sync for LLM- and diff-friendly graphs
+- [ ] Dynamic port lists, noodle styles, reroutes, preferences
+- [ ] xNode asset migration tool, samples, CI, OpenUPM
+
+See [Docs~/DESIGN.md](Docs~/DESIGN.md) for the architecture.
+
+## Acknowledgements
+
+- [xNode](https://github.com/Siccity/xNode) by Thor Brigsted — the API this project deliberately
+  mirrors (MIT, see THIRD-PARTY-NOTICES.md).
+- [SaintsField](https://github.com/TylerTemp/SaintsField) by TylerTemp — the inspector toolkit this
+  project integrates with.
+
+## License
+
+[MIT](LICENSE)
