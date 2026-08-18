@@ -297,15 +297,16 @@ namespace SaintsGraph.Editor
 
                 if (!_bodyBuilt)
                 {
-                    // No body rows exist yet: pills live in the standard containers,
-                    // visible only while collapsed and connected.
+                    // No body rows exist yet — either the node is collapsed, or its body has not
+                    // been built for the viewport yet. Connected pills live in the compact
+                    // containers so edges keep a correct anchor either way.
                     if (pill.parent != inputContainer && pill.parent != outputContainer)
                     {
                         pill.portName = ObjectNames.NicifyVariableName(port.fieldName);
                         (port.IsInput ? inputContainer : outputContainer).Add(pill);
                     }
 
-                    pill.style.display = !expanded && port.IsConnected ? DisplayStyle.Flex : DisplayStyle.None;
+                    pill.style.display = port.IsConnected ? DisplayStyle.Flex : DisplayStyle.None;
                     continue;
                 }
 

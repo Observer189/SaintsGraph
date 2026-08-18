@@ -78,8 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleting now reconcile node and edge views incrementally, and rows whose backing value
   becomes hidden toggle in place instead of being rebuilt. Full reloads are reserved for
   opening a graph, undo/redo and sidecar imports.
-- Node bodies are built only for nodes near the viewport, a few per frame, instead of all at
-  once when the graph opens — large graphs open immediately and fill in as you pan.
+- Node bodies are built only for nodes near the viewport instead of all at once when the graph
+  opens, and only once the view has settled — so panning never competes with body building.
+  Batches are bounded by time rather than node count (body cost varies widely), nodes nearest
+  the middle of the screen are built first, and connected port pills are drawn even before a
+  body exists, so edges stay anchored while a node fills in.
 - `PortTypeOverrideAttribute` and `NodeEnumAttribute` moved from the global namespace into
   `SaintsGraph`: declaring them globally, as xNode does, made the type ambiguous
   (`CS0433`) whenever both packages were installed — which is exactly the migration state.

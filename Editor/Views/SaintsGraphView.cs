@@ -22,8 +22,11 @@ namespace SaintsGraph.Editor
         /// <summary>How far outside the viewport node bodies are built ahead of time, in graph units.</summary>
         private const float BodyBuildMargin = 600f;
 
-        /// <summary>Bodies built per scheduled batch, so building never blocks a frame for long.</summary>
-        private const int BodyBuildBudget = 6;
+        /// <summary>Time a single build batch may take. Body cost varies too much to count nodes instead.</summary>
+        private const double BodyBuildBudgetMs = 4d;
+
+        /// <summary>How long the view must be still before bodies are built, so panning never competes with them.</summary>
+        private const double ViewSettleSeconds = 0.1d;
 
         public readonly NodeGraph graph;
         public readonly SaintsGraphEditor graphEditor;
@@ -36,6 +39,7 @@ namespace SaintsGraph.Editor
         private bool _suspendChangeHandling;
         private bool _reloadScheduled;
         private bool _bodyBuildScheduled;
+        private double _lastViewChange;
 
         public SaintsGraphView(NodeGraph graph, EditorWindow window)
         {
@@ -69,7 +73,11 @@ namespace SaintsGraph.Editor
             nodeCreationRequest = context =>
                 SearchWindow.Open(new SearchWindowContext(context.screenMousePosition), _searchProvider);
 
-            viewTransformChanged = _ => ScheduleBodyBuild();
+            viewTransformChanged = _ =>
+            {
+                _lastViewChange = EditorApplication.timeSinceStartup;
+                ScheduleBodyBuild();
+            };
             RegisterCallback<GeometryChangedEvent>(_ => ScheduleBodyBuild());
 
             Reload();
@@ -265,8 +273,8 @@ namespace SaintsGraph.Editor
             return view.portViews.TryGetValue(fieldName, out Port port) ? port : null;
         }
 
-        /// <summary>Builds bodies for nodes near the viewport, a few per batch, so panning stays smooth.</summary>
-        private void ScheduleBodyBuild()
+        /// <summary>Builds bodies for nodes near the viewport, once the view stops moving.</summary>
+        private void ScheduleBodyBuild(long delayMs = 16)
         {
             if (_bodyBuildScheduled || _nodeViews.Count == 0)
             {
@@ -274,18 +282,29 @@ namespace SaintsGraph.Editor
             }
 
             _bodyBuildScheduled = true;
-            schedule.Execute(BuildVisibleBodies).ExecuteLater(16);
+            schedule.Execute(BuildVisibleBodies).ExecuteLater(delayMs);
         }
 
         private void BuildVisibleBodies()
         {
             _bodyBuildScheduled = false;
+
+            // Building while the user is still panning is what makes panning stutter: nodes
+            // entering the viewport would each cost a body on the same frames that scroll it.
+            // Wait for the view to settle; connected ports are already drawn meanwhile, so
+            // edges stay anchored correctly while a body is still missing.
+            if (EditorApplication.timeSinceStartup - _lastViewChange < ViewSettleSeconds)
+            {
+                ScheduleBodyBuild(50);
+                return;
+            }
+
             Rect visible = contentViewContainer.WorldToLocal(worldBound);
             visible = new Rect(visible.x - BodyBuildMargin, visible.y - BodyBuildMargin,
                 visible.width + 2f * BodyBuildMargin, visible.height + 2f * BodyBuildMargin);
+            Vector2 center = visible.center;
 
-            int budget = BodyBuildBudget;
-            bool moreToDo = false;
+            List<SaintsNodeView> candidates = new List<SaintsNodeView>();
             foreach (SaintsNodeView view in _nodeViews.Values)
             {
                 if (view.BodyBuilt || !view.expanded)
@@ -297,22 +316,35 @@ namespace SaintsGraph.Editor
                 // A body-less node measures small; probe with a typical node size instead.
                 Rect probe = new Rect(placed.position,
                     new Vector2(Mathf.Max(placed.width, 260f), Mathf.Max(placed.height, 220f)));
-                if (!visible.Overlaps(probe))
+                if (visible.Overlaps(probe))
                 {
-                    continue;
+                    candidates.Add(view);
                 }
-
-                if (budget <= 0)
-                {
-                    moreToDo = true;
-                    break;
-                }
-
-                budget--;
-                view.EnsureBodyBuilt();
             }
 
-            if (moreToDo)
+            if (candidates.Count == 0)
+            {
+                return;
+            }
+
+            // Nearest to the middle of the screen first — that is where the user is looking.
+            candidates.Sort((a, b) =>
+                Vector2.SqrMagnitude(a.GetPosition().center - center)
+                    .CompareTo(Vector2.SqrMagnitude(b.GetPosition().center - center)));
+
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            int built = 0;
+            foreach (SaintsNodeView view in candidates)
+            {
+                view.EnsureBodyBuilt();
+                built++;
+                if (stopwatch.Elapsed.TotalMilliseconds >= BodyBuildBudgetMs)
+                {
+                    break;
+                }
+            }
+
+            if (built < candidates.Count)
             {
                 ScheduleBodyBuild();
             }
