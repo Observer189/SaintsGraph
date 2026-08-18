@@ -219,12 +219,6 @@ namespace SaintsGraph.Editor
 
         private static void ApplyNode(JsonObject jsonNode, Node node)
         {
-            string name = jsonNode.GetString("name");
-            if (!string.IsNullOrEmpty(name))
-            {
-                node.name = name;
-            }
-
             if (jsonNode["position"] is JsonArray position && position.Items.Count == 2
                 && position.Items[0] is JsonNumber x && position.Items[1] is JsonNumber y)
             {
@@ -256,7 +250,19 @@ namespace SaintsGraph.Editor
 
             if (changed)
             {
+                // Identity and ownership must never go through the overwrite: FromJsonOverwrite
+                // restores m_Name of persistent objects to its serialized value, which would
+                // undo renames, and the graph reference belongs to the model, not the sidecar.
+                current.Remove("m_Name");
+                current.Remove("graph");
                 EditorJsonUtility.FromJsonOverwrite(current.Write(false), node);
+            }
+
+            // Rename last so no serialization pass can clobber it.
+            string name = jsonNode.GetString("name");
+            if (!string.IsNullOrEmpty(name) && node.name != name)
+            {
+                node.name = name;
             }
 
             node.UpdatePorts();
