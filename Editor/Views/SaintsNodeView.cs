@@ -23,7 +23,26 @@ namespace SaintsGraph.Editor
 
         private readonly SerializedObject _serializedObject;
         private readonly SaintsGraphView _graphView;
+        private readonly Dictionary<string, VisualElement> _portRows = new Dictionary<string, VisualElement>();
         private Action _bodyTeardown;
+
+        /// <summary>
+        /// Collapsing hides the body (extensionContainer) where port pills normally live, which
+        /// would leave edges pointing into nothing. While collapsed, connected pills are moved
+        /// into the standard input/output containers next to the title; on expand they return
+        /// into their body rows. Guards exist because the base constructor touches this setter
+        /// before our fields are initialized.
+        /// </summary>
+        public override bool expanded
+        {
+            get => base.expanded;
+            set
+            {
+                base.expanded = value;
+                _graphView?.SetExpandedState(target, value);
+                UpdatePortPlacement();
+            }
+        }
 
         public SaintsNodeView(Node target, SaintsGraphView graphView, SaintsGraphEditor graphEditor)
         {
@@ -61,9 +80,13 @@ namespace SaintsGraph.Editor
 
             BuildBody();
             SetPosition(new Rect(target.position, Vector2.zero));
-            expanded = true;
             RefreshExpandedState();
             mainContainer.Bind(_serializedObject);
+
+            if (!graphView.GetExpandedState(target))
+            {
+                expanded = false;
+            }
         }
 
         /// <summary>Releases body resources (e.g. SaintsField renderers). Called before the view is discarded.</summary>
@@ -130,27 +153,76 @@ namespace SaintsGraph.Editor
             {
                 Port pill = MakePortPill(port);
                 VisualElement anchor = FindBoundElement(body, port.fieldName);
+                VisualElement row;
                 if (anchor == null)
                 {
-                    body.Add(MakeLabelRow(port, pill));
+                    row = MakeLabelRow(port, pill);
+                    body.Add(row);
                 }
                 else if (port.IsStatic && !ShowsBackingField(port))
                 {
-                    ReplaceWithLabelRow(anchor, port, pill);
+                    row = ReplaceWithLabelRow(anchor, port, pill);
                 }
                 else
                 {
-                    WrapWithPill(anchor, pill, port.IsInput);
+                    row = WrapWithPill(anchor, pill, port.IsInput);
                 }
+
+                _portRows[port.fieldName] = row;
             }
         }
 
-        private static void ReplaceWithLabelRow(VisualElement anchor, NodePort port, Port pill)
+        private void UpdatePortPlacement()
+        {
+            if (_portRows == null || portViews == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, Port> entry in portViews)
+            {
+                Port pill = entry.Value;
+                if (!(pill.userData is NodePort port) || !_portRows.TryGetValue(entry.Key, out VisualElement row))
+                {
+                    continue;
+                }
+
+                bool showCollapsed = !expanded && port.IsConnected;
+                if (showCollapsed)
+                {
+                    if (pill.parent != inputContainer && pill.parent != outputContainer)
+                    {
+                        pill.portName = ObjectNames.NicifyVariableName(port.fieldName);
+                        pill.RemoveFromHierarchy();
+                        (port.IsInput ? inputContainer : outputContainer).Add(pill);
+                    }
+                }
+                else if (pill.parent != row)
+                {
+                    pill.portName = "";
+                    pill.RemoveFromHierarchy();
+                    if (port.IsInput)
+                    {
+                        row.Insert(0, pill);
+                    }
+                    else
+                    {
+                        row.Add(pill);
+                    }
+                }
+            }
+
+            RefreshPorts();
+        }
+
+        private static VisualElement ReplaceWithLabelRow(VisualElement anchor, NodePort port, Port pill)
         {
             VisualElement parent = anchor.parent;
             int index = parent.IndexOf(anchor);
             anchor.RemoveFromHierarchy();
-            parent.Insert(index, MakeLabelRow(port, pill));
+            VisualElement row = MakeLabelRow(port, pill);
+            parent.Insert(index, row);
+            return row;
         }
 
         private Port MakePortPill(NodePort port)
@@ -173,7 +245,7 @@ namespace SaintsGraph.Editor
                 .First();
         }
 
-        private static void WrapWithPill(VisualElement anchor, Port pill, bool isInput)
+        private static VisualElement WrapWithPill(VisualElement anchor, Port pill, bool isInput)
         {
             VisualElement parent = anchor.parent;
             int index = parent.IndexOf(anchor);
@@ -193,6 +265,7 @@ namespace SaintsGraph.Editor
             }
 
             parent.Insert(index, row);
+            return row;
         }
 
         private static VisualElement MakeLabelRow(NodePort port, Port pill)

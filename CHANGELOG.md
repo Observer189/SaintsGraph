@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Collapsing a node no longer leaves edges pointing into empty space: while collapsed,
+  connected port pills move into the standard input/output containers next to the title
+  (with port names) and return to their body rows on expand. Collapse state is preserved
+  across view rebuilds within the session.
 - Connecting an input port no longer moves its row to the end of the node body: hidden
   backing values (`ShowBackingValue.Never`/connected `Unconnected`) are now replaced with
   a label row **in place**, keeping the field's natural position. Output port rows also

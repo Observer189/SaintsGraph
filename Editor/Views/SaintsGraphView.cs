@@ -20,8 +20,20 @@ namespace SaintsGraph.Editor
         private readonly EditorWindow _window;
         private readonly NodeSearchWindowProvider _searchProvider;
         private readonly Dictionary<Node, SaintsNodeView> _nodeViews = new Dictionary<Node, SaintsNodeView>();
+        private readonly Dictionary<Node, bool> _expandedStates = new Dictionary<Node, bool>();
         private bool _reloading;
         private bool _reloadScheduled;
+
+        /// <summary>Collapse state per node, preserved across view reloads (session only).</summary>
+        internal bool GetExpandedState(Node node)
+        {
+            return !_expandedStates.TryGetValue(node, out bool expanded) || expanded;
+        }
+
+        internal void SetExpandedState(Node node, bool expanded)
+        {
+            _expandedStates[node] = expanded;
+        }
 
         public SaintsGraphView(NodeGraph graph, EditorWindow window)
         {
