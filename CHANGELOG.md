@@ -74,6 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `PortTypeOverrideAttribute` and `NodeEnumAttribute` moved from the global namespace into
+  `SaintsGraph`: declaring them globally, as xNode does, made the type ambiguous
+  (`CS0433`) whenever both packages were installed — which is exactly the migration state.
+  Code with `using SaintsGraph;` is unaffected; while xNode is installed alongside, qualify
+  as `[SaintsGraph.PortTypeOverride(...)]`, and the migration assembly warns about fields
+  that silently bound to xNode's attribute instead.
+
 - Structural edits (create/connect/move/delete) no longer write assets to disk immediately —
   that caused a visible hitch on every node creation. Edits mark objects dirty; saves happen
   on the toolbar Save button, on window close, after undo/redo, and with the project save

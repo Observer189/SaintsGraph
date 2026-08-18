@@ -41,6 +41,11 @@ The public API matches; the internals do not:
   for outputs).
 - `.asset` files are **not** binary-compatible with xNode. A migration tool is planned; the
   intended migration path for code is switching the base class, for assets — the converter.
+- `PortTypeOverride` and `NodeEnum` live in the `SaintsGraph` namespace instead of xNode's
+  global namespace, so both packages can be installed side by side during migration. Code
+  with `using SaintsGraph;` compiles unchanged — but while xNode is *also* installed, write
+  `[SaintsGraph.PortTypeOverride(...)]`, because C# resolves the global-namespace attribute
+  first. The migration assembly warns when it finds fields hitting this.
 - Obsolete xNode aliases (`InstancePorts`, `AddInstanceInput`, ...) are not carried over.
 
 ## Install
