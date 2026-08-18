@@ -25,6 +25,7 @@ namespace SaintsGraph.Editor
         private readonly SaintsGraphView _graphView;
         private readonly Dictionary<string, VisualElement> _portRows = new Dictionary<string, VisualElement>();
         private Action _bodyTeardown;
+        private bool _bodyBuilt;
 
         /// <summary>
         /// Collapsing hides the body (extensionContainer) where port pills normally live, which
@@ -40,6 +41,11 @@ namespace SaintsGraph.Editor
             {
                 base.expanded = value;
                 _graphView?.SetExpandedState(target, value);
+                if (value)
+                {
+                    EnsureBodyBuilt();
+                }
+
                 UpdatePortPlacement();
             }
         }
@@ -78,15 +84,50 @@ namespace SaintsGraph.Editor
                 titleContainer.Insert(0, customHeader);
             }
 
-            BuildBody();
-            SetPosition(new Rect(target.position, Vector2.zero));
-            RefreshExpandedState();
-            mainContainer.Bind(_serializedObject);
-
-            if (!graphView.GetExpandedState(target))
+            // Bodies are built lazily: a node that starts collapsed never pays for its body
+            // (which matters with SaintsField renderers polling per member) until expanded.
+            CreatePortPills();
+            if (graphView.GetExpandedState(target))
+            {
+                EnsureBodyBuilt();
+            }
+            else
             {
                 expanded = false;
             }
+
+            UpdatePortPlacement();
+            SetPosition(new Rect(target.position, Vector2.zero));
+            RefreshExpandedState();
+        }
+
+        private void CreatePortPills()
+        {
+            foreach (NodePort port in target.Ports)
+            {
+                MakePortPill(port);
+            }
+        }
+
+        private void EnsureBodyBuilt()
+        {
+            if (_bodyBuilt || portViews == null)
+            {
+                return;
+            }
+
+            _bodyBuilt = true;
+            BuildBody();
+            RefreshExpandedState();
+            mainContainer.Bind(_serializedObject);
+        }
+
+        public void SetCycleWarning(bool inCycle)
+        {
+            EnableInClassList("saints-node-in-cycle", inCycle);
+            tooltip = inCycle
+                ? "This node is part of a cycle. Pull evaluation (GetInputValue) would recurse forever."
+                : null;
         }
 
         /// <summary>Releases body resources (e.g. SaintsField renderers). Called before the view is discarded.</summary>
@@ -151,7 +192,13 @@ namespace SaintsGraph.Editor
         {
             foreach (NodePort port in target.Ports)
             {
-                Port pill = MakePortPill(port);
+                if (!portViews.TryGetValue(port.fieldName, out Port pill))
+                {
+                    pill = MakePortPill(port);
+                }
+
+                pill.portName = "";
+                pill.style.display = DisplayStyle.Flex;
                 VisualElement anchor = FindBoundElement(body, port.fieldName);
                 VisualElement row;
                 if (anchor == null)
@@ -182,7 +229,26 @@ namespace SaintsGraph.Editor
             foreach (KeyValuePair<string, Port> entry in portViews)
             {
                 Port pill = entry.Value;
-                if (!(pill.userData is NodePort port) || !_portRows.TryGetValue(entry.Key, out VisualElement row))
+                if (!(pill.userData is NodePort port))
+                {
+                    continue;
+                }
+
+                if (!_bodyBuilt)
+                {
+                    // No body rows exist yet: pills live in the standard containers,
+                    // visible only while collapsed and connected.
+                    if (pill.parent != inputContainer && pill.parent != outputContainer)
+                    {
+                        pill.portName = ObjectNames.NicifyVariableName(port.fieldName);
+                        (port.IsInput ? inputContainer : outputContainer).Add(pill);
+                    }
+
+                    pill.style.display = !expanded && port.IsConnected ? DisplayStyle.Flex : DisplayStyle.None;
+                    continue;
+                }
+
+                if (!_portRows.TryGetValue(entry.Key, out VisualElement row))
                 {
                     continue;
                 }

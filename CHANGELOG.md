@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cycle detection in the editor: nodes participating in a cycle (including self-loops)
+  get a red border and a warning tooltip, updated on every graph change. The runtime
+  still allows cycles for xNode parity — this is a visual guard against the infinite
+  recursion pull evaluation would hit.
+- Lazy node bodies: a node that starts (or stays) collapsed never builds its body at
+  all — with the SaintsField integration this means no member renderers and no polling
+  for collapsed nodes. The body is built on first expand; connected port pills are shown
+  in the compact title containers meanwhile.
+
 - JSON sidecar (v1): `Assets → SaintsGraph → Export/Import Graph JSON` writes a
   human/LLM-friendly `<Graph>.graph.json` next to the asset (flat node list with field
   values in Unity JSON shape, `$ref:guid:localId` asset references, inline edge list) and

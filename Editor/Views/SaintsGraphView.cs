@@ -115,6 +115,12 @@ namespace SaintsGraph.Editor
                 AddElement(edge);
             }
 
+            HashSet<Node> cycleNodes = GraphCycleDetector.FindCycleNodes(graph);
+            foreach (KeyValuePair<Node, SaintsNodeView> pair in _nodeViews)
+            {
+                pair.Value.SetCycleWarning(cycleNodes.Contains(pair.Key));
+            }
+
             _reloading = false;
         }
 

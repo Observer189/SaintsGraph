@@ -34,3 +34,9 @@ GridBackground {
     min-width: 60px;
 }
 
+.saints-node-in-cycle #node-border {
+    border-color: #d65454;
+    border-width: 2px;
+}
+
+
