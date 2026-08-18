@@ -14,6 +14,9 @@ namespace SaintsGraph.Editor
     /// The body comes from the node editor's CreateBody override, the registered
     /// <see cref="INodeBodyBuilder"/> (SaintsField integration), or the built-in
     /// PropertyField loop — port pills are then attached onto the matching field rows.
+    ///
+    /// Bodies are built lazily (see <see cref="EnsureBodyBuilt"/>), driven by the graph view:
+    /// on a large graph only what is on screen pays for its body.
     /// </summary>
     internal class SaintsNodeView : GraphViewNode
     {
@@ -24,17 +27,17 @@ namespace SaintsGraph.Editor
         private readonly SerializedObject _serializedObject;
         private readonly SaintsGraphView _graphView;
         private readonly Dictionary<string, VisualElement> _portRows = new Dictionary<string, VisualElement>();
+
+        /// <summary>Per port: the bound field element and the label shown when its value is hidden.</summary>
+        private readonly Dictionary<string, (VisualElement field, VisualElement label)> _portContent =
+            new Dictionary<string, (VisualElement, VisualElement)>();
+
         private List<PortCache.PortTemplate> _listTemplates = new List<PortCache.PortTemplate>();
         private Action _bodyTeardown;
         private bool _bodyBuilt;
 
-        /// <summary>
-        /// Collapsing hides the body (extensionContainer) where port pills normally live, which
-        /// would leave edges pointing into nothing. While collapsed, connected pills are moved
-        /// into the standard input/output containers next to the title; on expand they return
-        /// into their body rows. Guards exist because the base constructor touches this setter
-        /// before our fields are initialized.
-        /// </summary>
+        public bool BodyBuilt => _bodyBuilt;
+
         public override bool expanded
         {
             get => base.expanded;
@@ -85,14 +88,8 @@ namespace SaintsGraph.Editor
                 titleContainer.Insert(0, customHeader);
             }
 
-            // Bodies are built lazily: a node that starts collapsed never pays for its body
-            // (which matters with SaintsField renderers polling per member) until expanded.
             CreatePortPills();
-            if (graphView.GetExpandedState(target))
-            {
-                EnsureBodyBuilt();
-            }
-            else
+            if (!graphView.GetExpandedState(target))
             {
                 expanded = false;
             }
@@ -100,27 +97,6 @@ namespace SaintsGraph.Editor
             UpdatePortPlacement();
             SetPosition(new Rect(target.position, Vector2.zero));
             RefreshExpandedState();
-        }
-
-        private void CreatePortPills()
-        {
-            foreach (NodePort port in target.Ports)
-            {
-                MakePortPill(port);
-            }
-        }
-
-        private void EnsureBodyBuilt()
-        {
-            if (_bodyBuilt || portViews == null)
-            {
-                return;
-            }
-
-            _bodyBuilt = true;
-            BuildBody();
-            RefreshExpandedState();
-            mainContainer.Bind(_serializedObject);
         }
 
         public void SetCycleWarning(bool inCycle)
@@ -139,13 +115,55 @@ namespace SaintsGraph.Editor
             teardown?.Invoke();
         }
 
+        /// <summary>
+        /// Swaps rows between "editable field" and "label" when a port's connected state changes,
+        /// without rebuilding the body — the elements are kept and only their display toggles.
+        /// </summary>
+        public void RefreshConnectedState()
+        {
+            foreach (KeyValuePair<string, (VisualElement field, VisualElement label)> entry in _portContent)
+            {
+                NodePort port = target.GetPort(entry.Key);
+                if (port == null || entry.Value.field == null || entry.Value.label == null)
+                {
+                    continue;
+                }
+
+                bool showField = ShowsBackingField(port);
+                entry.Value.field.style.display = showField ? DisplayStyle.Flex : DisplayStyle.None;
+                entry.Value.label.style.display = showField ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            UpdatePortPlacement();
+        }
+
+        public void EnsureBodyBuilt()
+        {
+            if (_bodyBuilt || portViews == null || !expanded)
+            {
+                return;
+            }
+
+            _bodyBuilt = true;
+            BuildBody();
+            RefreshExpandedState();
+            mainContainer.Bind(_serializedObject);
+        }
+
+        private void CreatePortPills()
+        {
+            foreach (NodePort port in target.Ports)
+            {
+                MakePortPill(port);
+            }
+        }
+
         private void BuildBody()
         {
-            // Port fields are NOT skipped: the builder places them at their natural position,
-            // and hidden backing values are then replaced with a label row in place —
-            // otherwise a connected port's row would jump to the end of the body.
-            // Backing fields of dynamic port lists ARE skipped: they render as custom
-            // list blocks with one port per element.
+            // Port fields are NOT skipped: the builder places them at their natural position, and
+            // hidden backing values are toggled to a label in place — otherwise a connected port's
+            // row would jump to the end of the body. Backing fields of dynamic port lists ARE
+            // skipped: they render as custom list blocks with one port per element.
             List<string> skipFields = new List<string> { "m_Script", "graph", "position", "dynamicPorts" };
             _listTemplates = new List<PortCache.PortTemplate>();
             foreach (PortCache.PortTemplate template in PortCache.GetTemplates(target.GetType()))
@@ -177,6 +195,11 @@ namespace SaintsGraph.Editor
 
         private bool ShowsBackingField(NodePort port)
         {
+            if (port.IsDynamic)
+            {
+                return false;
+            }
+
             Node.ShowBackingValue backing = NodeEditorUtilities.GetBackingValue(target, port.fieldName);
             return backing == Node.ShowBackingValue.Always
                    || (backing == Node.ShowBackingValue.Unconnected && !port.IsConnected);
@@ -192,8 +215,6 @@ namespace SaintsGraph.Editor
                 {
                     if (skipFields.Contains(property.name))
                     {
-                        // Dynamic port lists keep their declared position via a placeholder
-                        // that the list block replaces.
                         if (IsDynamicListField(property.name))
                         {
                             container.Add(new VisualElement { name = "saints-dpl-" + property.name });
@@ -242,24 +263,21 @@ namespace SaintsGraph.Editor
 
                 pill.portName = "";
                 pill.style.display = DisplayStyle.Flex;
+
                 VisualElement anchor = FindBoundElement(body, port.fieldName);
-                VisualElement row;
                 if (anchor == null)
                 {
-                    row = MakeLabelRow(port, pill);
-                    body.Add(row);
-                }
-                else if (port.IsStatic && !ShowsBackingField(port))
-                {
-                    row = ReplaceWithLabelRow(anchor, port, pill);
+                    VisualElement labelRow = MakeLabelRow(port, pill);
+                    body.Add(labelRow);
+                    _portRows[port.fieldName] = labelRow;
                 }
                 else
                 {
-                    row = WrapWithPill(anchor, pill, port.IsInput);
+                    _portRows[port.fieldName] = WrapWithPill(port, anchor, pill);
                 }
-
-                _portRows[port.fieldName] = row;
             }
+
+            UpdatePortPlacement();
         }
 
         private void UpdatePortPlacement()
@@ -305,10 +323,13 @@ namespace SaintsGraph.Editor
                         pill.RemoveFromHierarchy();
                         (port.IsInput ? inputContainer : outputContainer).Add(pill);
                     }
+
+                    pill.style.display = DisplayStyle.Flex;
                 }
                 else if (pill.parent != row)
                 {
                     pill.portName = "";
+                    pill.style.display = DisplayStyle.Flex;
                     pill.RemoveFromHierarchy();
                     if (port.IsInput)
                     {
@@ -322,16 +343,6 @@ namespace SaintsGraph.Editor
             }
 
             RefreshPorts();
-        }
-
-        private static VisualElement ReplaceWithLabelRow(VisualElement anchor, NodePort port, Port pill)
-        {
-            VisualElement parent = anchor.parent;
-            int index = parent.IndexOf(anchor);
-            anchor.RemoveFromHierarchy();
-            VisualElement row = MakeLabelRow(port, pill);
-            parent.Insert(index, row);
-            return row;
         }
 
         private bool IsDynamicListField(string fieldName)
@@ -537,7 +548,9 @@ namespace SaintsGraph.Editor
         {
             EditorUtility.SetDirty(target);
             EditorUtility.SetDirty(_graphView.graph);
-            _graphView.ScheduleReload();
+            // Element count and port identities changed: this node's body has to be rebuilt,
+            // but the rest of the graph does not.
+            _graphView.RebuildNodeView(target);
         }
 
         private Port MakePortPill(NodePort port)
@@ -560,7 +573,8 @@ namespace SaintsGraph.Editor
                 .First();
         }
 
-        private static VisualElement WrapWithPill(VisualElement anchor, Port pill, bool isInput)
+        /// <summary>Wraps a bound field in a port row, with a label that replaces it while the value is hidden.</summary>
+        private VisualElement WrapWithPill(NodePort port, VisualElement anchor, Port pill)
         {
             VisualElement parent = anchor.parent;
             int index = parent.IndexOf(anchor);
@@ -568,13 +582,28 @@ namespace SaintsGraph.Editor
             row.AddToClassList("saints-port-row");
             anchor.RemoveFromHierarchy();
             anchor.style.flexGrow = 1;
-            if (isInput)
+
+            Label label = new Label(ObjectNames.NicifyVariableName(port.fieldName));
+            label.style.flexGrow = 1;
+            if (port.IsOutput)
+            {
+                label.style.unityTextAlign = TextAnchor.MiddleRight;
+            }
+
+            bool showField = ShowsBackingField(port);
+            anchor.style.display = showField ? DisplayStyle.Flex : DisplayStyle.None;
+            label.style.display = showField ? DisplayStyle.None : DisplayStyle.Flex;
+            _portContent[port.fieldName] = (anchor, label);
+
+            if (port.IsInput)
             {
                 row.Add(pill);
                 row.Add(anchor);
+                row.Add(label);
             }
             else
             {
+                row.Add(label);
                 row.Add(anchor);
                 row.Add(pill);
             }
