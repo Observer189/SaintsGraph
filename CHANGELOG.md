@@ -45,6 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Connecting an input port no longer moves its row to the end of the node body: hidden
+  backing values (`ShowBackingValue.Never`/connected `Unconnected`) are now replaced with
+  a label row **in place**, keeping the field's natural position. Output port rows also
+  sit at their field position now instead of being appended at the end.
+
 - Undo of node creation/deletion no longer leaves the graph asset with destroyed or
   orphaned node sub-assets (which made the Project browser throw
   `NullReferenceException` in `ObjectListArea`). A sanitizer repairs graph assets after

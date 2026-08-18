@@ -76,14 +76,10 @@ namespace SaintsGraph.Editor
 
         private void BuildBody()
         {
+            // Port fields are NOT skipped: the builder places them at their natural position,
+            // and hidden backing values are then replaced with a label row in place —
+            // otherwise a connected port's row would jump to the end of the body.
             List<string> skipFields = new List<string> { "m_Script", "graph", "position", "dynamicPorts" };
-            foreach (NodePort port in target.Ports)
-            {
-                if (port.IsStatic && !ShowsBackingField(port))
-                {
-                    skipFields.Add(port.fieldName);
-                }
-            }
 
             VisualElement body = editor.CreateBody();
             if (body == null && NodeBodyBuilderRegistry.builder != null)
@@ -134,15 +130,27 @@ namespace SaintsGraph.Editor
             {
                 Port pill = MakePortPill(port);
                 VisualElement anchor = FindBoundElement(body, port.fieldName);
-                if (anchor != null)
-                {
-                    WrapWithPill(anchor, pill, port.IsInput);
-                }
-                else
+                if (anchor == null)
                 {
                     body.Add(MakeLabelRow(port, pill));
                 }
+                else if (port.IsStatic && !ShowsBackingField(port))
+                {
+                    ReplaceWithLabelRow(anchor, port, pill);
+                }
+                else
+                {
+                    WrapWithPill(anchor, pill, port.IsInput);
+                }
             }
+        }
+
+        private static void ReplaceWithLabelRow(VisualElement anchor, NodePort port, Port pill)
+        {
+            VisualElement parent = anchor.parent;
+            int index = parent.IndexOf(anchor);
+            anchor.RemoveFromHierarchy();
+            parent.Insert(index, MakeLabelRow(port, pill));
         }
 
         private Port MakePortPill(NodePort port)
