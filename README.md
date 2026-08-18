@@ -73,12 +73,35 @@ public class AddNode : Node
 }
 ```
 
+## JSON sidecar
+
+`Assets → SaintsGraph → Export Graph JSON` writes a readable `MyGraph.graph.json` next to the
+asset — a flat node list with field values plus an edge list:
+
+```json
+{
+  "format": "saintsgraph/1",
+  "nodes": [
+    { "id": "Float", "name": "Float", "type": "FloatNode, Assembly-CSharp",
+      "position": [-180, 40], "fields": { "value": 2 } },
+    { "id": "Add", "name": "Add", "type": "AddNode, Assembly-CSharp",
+      "position": [80, 40], "fields": { "a": 0, "b": 0 } }
+  ],
+  "edges": [ ["Float", "value", "Add", "a"] ]
+}
+```
+
+Edit it by hand, in a PR review, or with an LLM, then `Import Graph JSON` applies the changes
+back: field values, positions, renames (the `name` field), added/removed nodes and edges.
+`Tools → SaintsGraph → Auto Export Graph JSON` keeps the sidecar fresh on every save, so graph
+changes show up as readable diffs in version control.
+
 ## Roadmap
 
 - [x] Runtime core (xNode-shaped API, graph-level edges, tests)
 - [x] Graph editor window MVP (GraphView backend, UI Toolkit node bodies, create/connect/undo)
 - [x] SaintsField integration assembly (`[Button]`, `[ShowIf]`, layouts in nodes)
-- [ ] JSON export / two-way sync for LLM- and diff-friendly graphs
+- [x] JSON sidecar v1 (export/import commands, auto-export on save)
 - [ ] Dynamic port lists, noodle styles, reroutes, preferences
 - [ ] xNode asset migration tool, samples, CI, OpenUPM
 

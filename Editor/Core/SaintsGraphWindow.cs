@@ -38,6 +38,12 @@ namespace SaintsGraph.Editor
 
         public NodeGraph Graph => graph;
 
+        /// <summary>Re-syncs the view with the model (e.g. after a JSON sidecar import).</summary>
+        public void ReloadViewFromModel()
+        {
+            _view?.ScheduleReload();
+        }
+
         public void SetGraph(NodeGraph value)
         {
             graph = value;

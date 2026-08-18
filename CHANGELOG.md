@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- JSON sidecar (v1): `Assets → SaintsGraph → Export/Import Graph JSON` writes a
+  human/LLM-friendly `<Graph>.graph.json` next to the asset (flat node list with field
+  values in Unity JSON shape, `$ref:guid:localId` asset references, inline edge list) and
+  applies edits back — field values, positions, renames via the `name` field, added and
+  removed nodes and edges. `Tools → SaintsGraph → Auto Export Graph JSON` refreshes the
+  sidecar on every asset save. Open graph windows reload after import.
+
 - SaintsField integration assembly (`SaintsGraph.Editor.SaintsFieldSupport`): when the
   SaintsField package (≥ 5.25.0) is installed, node bodies are rendered through
   SaintsField's member-renderer engine — `[Button]`, `[ShowIf]`, layout groups,

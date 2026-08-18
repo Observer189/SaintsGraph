@@ -3,6 +3,7 @@
     "rootNamespace": "SaintsGraph.Tests",
     "references": [
         "SaintsGraph",
+        "SaintsGraph.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
