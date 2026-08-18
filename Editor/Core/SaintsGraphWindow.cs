@@ -69,6 +69,7 @@ namespace SaintsGraph.Editor
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
+            SaveGraph();
         }
 
         private void OnUndoRedo()

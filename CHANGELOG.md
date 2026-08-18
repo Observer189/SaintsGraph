@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filtering pitfalls.
 - Edit-mode test suite for the runtime core.
 
+### Changed
+
+- Structural edits (create/connect/move/delete) no longer write assets to disk immediately —
+  that caused a visible hitch on every node creation. Edits mark objects dirty; saves happen
+  on the toolbar Save button, on window close, after undo/redo, and with the project save
+  (Ctrl+S).
+
 ### Fixed
 
 - Undo of node creation/deletion no longer leaves the graph asset with destroyed or

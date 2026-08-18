@@ -199,7 +199,7 @@ namespace SaintsGraph.Editor
 
             if (structuralChange)
             {
-                SaveAll();
+                MarkDirty();
                 // Re-sync views with the model: Override ports auto-clear old connections,
                 // ShowBackingValue.Unconnected fields appear/disappear, vetoed removals restore.
                 ScheduleReload();
@@ -246,11 +246,14 @@ namespace SaintsGraph.Editor
             Vector2 graphPosition = contentViewContainer.WorldToLocal(windowPosition);
 
             graphEditor.CreateNode(type, graphPosition);
-            SaveAll();
+            MarkDirty();
             ScheduleReload();
         }
 
-        private void SaveAll()
+        // Writing to disk on every structural change causes a visible hitch, so edits only
+        // mark objects dirty. Actual saves happen on the toolbar button, window close and
+        // after undo/redo (where the file must match memory for the Project browser).
+        private void MarkDirty()
         {
             EditorUtility.SetDirty(graph);
             foreach (Node node in graph.nodes)
@@ -260,8 +263,6 @@ namespace SaintsGraph.Editor
                     EditorUtility.SetDirty(node);
                 }
             }
-
-            AssetDatabase.SaveAssets();
         }
     }
 }
