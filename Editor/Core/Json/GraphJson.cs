@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,16 +14,28 @@ namespace SaintsGraph.Editor
     /// the asset; import applies edits (field values, positions, renames, added and
     /// removed nodes and edges) back onto the asset.
     ///
-    /// Node "id" is the stable key used by edges; "name" is the display name — editing
-    /// it in JSON renames the node. Asset references serialize as "$ref:guid:localId".
-    /// Field values use the same shape as Unity's own JSON (EditorJsonUtility), merged
-    /// on top of the current node state, so unknown fields keep their values.
+    /// Node "id" is the stable key used by edges; "name" is the display name вЂ” editing
+    /// it in JSON renames the node.
+    ///
+    /// Field values use Unity's own serialization (EditorJsonUtility) merged on top of the
+    /// current node state, so unknown fields keep their values: asset references appear as
+    /// {fileID, guid, type} and survive by GUID, and [SerializeReference] fields appear as
+    /// {"rid": n} plus a "references" block naming the concrete type вЂ” both round-trip.
+    /// Unity wraps that payload in a single "MonoBehaviour" key, which is unwrapped here so
+    /// the sidecar stays flat and readable.
     /// </summary>
     public static class GraphJson
     {
         public const string SidecarSuffix = ".graph.json";
         private const string FormatVersion = "saintsgraph/1";
-        private static readonly string[] InternalFields = { "m_Name", "m_EditorClassIdentifier", "graph", "position", "dynamicPorts" };
+
+        /// <summary>Engine bookkeeping and fields the sidecar represents at node level instead.</summary>
+        private static readonly string[] InternalFields =
+        {
+            "m_Enabled", "m_EditorHideFlags", "m_ObjectHideFlags", "m_Name", "m_EditorClassIdentifier",
+            "m_Script", "m_CorrespondingSourceObject", "m_PrefabInstance", "m_PrefabAsset", "m_GameObject",
+            "graph", "position", "dynamicPorts"
+        };
 
         public static string SidecarPathFor(NodeGraph graph)
         {
@@ -108,17 +120,17 @@ namespace SaintsGraph.Editor
             position.Items.Add(JsonNumber.From(Math.Round(node.position.y, 2)));
             result["position"] = position;
 
-            JsonObject raw = (JsonObject)JsonValue.Parse(EditorJsonUtility.ToJson(node));
-            JsonValue dynamicPorts = raw["dynamicPorts"];
+            JsonObject payload = UnwrapPayload(node, out string _);
+            JsonValue dynamicPorts = payload["dynamicPorts"];
             foreach (string key in InternalFields)
             {
-                raw.Remove(key);
+                payload.Remove(key);
             }
 
             JsonObject fields = new JsonObject();
-            foreach (KeyValuePair<string, JsonValue> entry in raw.Entries)
+            foreach (KeyValuePair<string, JsonValue> entry in payload.Entries)
             {
-                fields[entry.Key] = ObjectRefsToStrings(entry.Value);
+                fields[entry.Key] = entry.Value;
             }
 
             if (fields.Entries.Count > 0)
@@ -219,13 +231,7 @@ namespace SaintsGraph.Editor
 
         private static void ApplyNode(JsonObject jsonNode, Node node)
         {
-            if (jsonNode["position"] is JsonArray position && position.Items.Count == 2
-                && position.Items[0] is JsonNumber x && position.Items[1] is JsonNumber y)
-            {
-                node.position = new Vector2(x.AsFloat, y.AsFloat);
-            }
-
-            JsonObject current = (JsonObject)JsonValue.Parse(EditorJsonUtility.ToJson(node));
+            JsonObject payload = UnwrapPayload(node, out string wrapperKey);
             bool changed = false;
 
             if (jsonNode["fields"] is JsonObject fields)
@@ -237,28 +243,40 @@ namespace SaintsGraph.Editor
                         continue;
                     }
 
-                    current[entry.Key] = StringsToObjectRefs(entry.Value);
+                    payload[entry.Key] = entry.Value;
                     changed = true;
                 }
             }
 
             if (jsonNode["dynamicPorts"] is JsonArray dynamicPorts)
             {
-                current["dynamicPorts"] = dynamicPorts;
+                payload["dynamicPorts"] = dynamicPorts;
                 changed = true;
             }
 
             if (changed)
             {
-                // Identity and ownership must never go through the overwrite: FromJsonOverwrite
-                // restores m_Name of persistent objects to its serialized value, which would
-                // undo renames, and the graph reference belongs to the model, not the sidecar.
-                current.Remove("m_Name");
-                current.Remove("graph");
-                EditorJsonUtility.FromJsonOverwrite(current.Write(false), node);
+                // Identity, ownership and layout never go through the overwrite: FromJsonOverwrite
+                // restores m_Name of persistent objects (undoing renames), the graph reference
+                // belongs to the model rather than the sidecar (importing into another asset must
+                // not repoint it), and position is applied from the node-level field below.
+                payload.Remove("m_Name");
+                payload.Remove("graph");
+                payload.Remove("position");
+
+                JsonValue document = wrapperKey == null
+                    ? (JsonValue)payload
+                    : new JsonObject { [wrapperKey] = payload };
+                EditorJsonUtility.FromJsonOverwrite(document.Write(false), node);
             }
 
-            // Rename last so no serialization pass can clobber it.
+            // Position and name are applied after the overwrite so no serialization pass clobbers them.
+            if (jsonNode["position"] is JsonArray position && position.Items.Count == 2
+                && position.Items[0] is JsonNumber x && position.Items[1] is JsonNumber y)
+            {
+                node.position = new Vector2(x.AsFloat, y.AsFloat);
+            }
+
             string name = jsonNode.GetString("name");
             if (!string.IsNullOrEmpty(name) && node.name != name)
             {
@@ -266,6 +284,24 @@ namespace SaintsGraph.Editor
             }
 
             node.UpdatePorts();
+        }
+
+        /// <summary>
+        /// EditorJsonUtility wraps an object's fields in a single key ("MonoBehaviour" for
+        /// ScriptableObjects). Returns the inner payload plus that key, so the document can be
+        /// rebuilt for FromJsonOverwrite. Falls back to the root object if the shape ever changes.
+        /// </summary>
+        internal static JsonObject UnwrapPayload(Object target, out string wrapperKey)
+        {
+            JsonObject root = (JsonObject)JsonValue.Parse(EditorJsonUtility.ToJson(target));
+            if (root.Entries.Count == 1 && root.Entries[0].Value is JsonObject payload)
+            {
+                wrapperKey = root.Entries[0].Key;
+                return payload;
+            }
+
+            wrapperKey = null;
+            return root;
         }
 
         private static void ApplyEdges(NodeGraph graph, JsonArray jsonEdges, Dictionary<string, Node> byId)
@@ -370,117 +406,6 @@ namespace SaintsGraph.Editor
         private static Type ResolveType(string typeString)
         {
             return string.IsNullOrEmpty(typeString) ? null : Type.GetType(typeString, false);
-        }
-
-        /// <summary>{"instanceID": n} → "$ref:guid:localId" (or null for none/unpersistable).</summary>
-        internal static JsonValue ObjectRefsToStrings(JsonValue value)
-        {
-            switch (value)
-            {
-                case JsonObject obj when obj.Entries.Count == 1 && obj.Entries[0].Key == "instanceID":
-                {
-                    if (!(obj.Entries[0].Value is JsonNumber number) || (int)number.AsDouble == 0)
-                    {
-                        return JsonNull.Instance;
-                    }
-
-                    Object target = EditorUtility.InstanceIDToObject((int)number.AsDouble);
-                    if (target == null
-                        || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(target, out string guid, out long localId))
-                    {
-                        return JsonNull.Instance;
-                    }
-
-                    return new JsonString("$ref:" + guid + ":" + localId);
-                }
-                case JsonObject obj:
-                {
-                    JsonObject copy = new JsonObject();
-                    foreach (KeyValuePair<string, JsonValue> entry in obj.Entries)
-                    {
-                        copy[entry.Key] = ObjectRefsToStrings(entry.Value);
-                    }
-
-                    return copy;
-                }
-                case JsonArray array:
-                {
-                    JsonArray copy = new JsonArray();
-                    foreach (JsonValue item in array.Items)
-                    {
-                        copy.Items.Add(ObjectRefsToStrings(item));
-                    }
-
-                    return copy;
-                }
-                default:
-                    return value;
-            }
-        }
-
-        /// <summary>"$ref:guid:localId" → {"instanceID": n}; null in a ref position stays null (Unity treats it as none).</summary>
-        private static JsonValue StringsToObjectRefs(JsonValue value)
-        {
-            switch (value)
-            {
-                case JsonString text when text.Value.StartsWith("$ref:", StringComparison.Ordinal):
-                {
-                    string[] parts = text.Value.Split(':');
-                    if (parts.Length != 3 || !long.TryParse(parts[2], out long localId))
-                    {
-                        return MakeInstanceId(0);
-                    }
-
-                    string path = AssetDatabase.GUIDToAssetPath(parts[1]);
-                    if (string.IsNullOrEmpty(path))
-                    {
-                        Debug.LogWarning("Sidecar reference to missing asset guid " + parts[1]);
-                        return MakeInstanceId(0);
-                    }
-
-                    foreach (Object candidate in AssetDatabase.LoadAllAssetsAtPath(path))
-                    {
-                        if (candidate != null
-                            && AssetDatabase.TryGetGUIDAndLocalFileIdentifier(candidate, out string _, out long candidateId)
-                            && candidateId == localId)
-                        {
-                            return MakeInstanceId(candidate.GetInstanceID());
-                        }
-                    }
-
-                    Object main = AssetDatabase.LoadMainAssetAtPath(path);
-                    return MakeInstanceId(main == null ? 0 : main.GetInstanceID());
-                }
-                case JsonNull _:
-                    return MakeInstanceId(0);
-                case JsonObject obj:
-                {
-                    JsonObject copy = new JsonObject();
-                    foreach (KeyValuePair<string, JsonValue> entry in obj.Entries)
-                    {
-                        copy[entry.Key] = StringsToObjectRefs(entry.Value);
-                    }
-
-                    return copy;
-                }
-                case JsonArray array:
-                {
-                    JsonArray copy = new JsonArray();
-                    foreach (JsonValue item in array.Items)
-                    {
-                        copy.Items.Add(StringsToObjectRefs(item));
-                    }
-
-                    return copy;
-                }
-                default:
-                    return value;
-            }
-        }
-
-        private static JsonObject MakeInstanceId(int id)
-        {
-            return new JsonObject { ["instanceID"] = JsonNumber.From(id) };
         }
     }
 }

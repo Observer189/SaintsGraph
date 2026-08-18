@@ -24,7 +24,10 @@ namespace SaintsGraph.Editor.XNodeMigration
     public static class XNodeGraphMigrator
     {
         private static readonly string[] SkipFields =
-            { "m_Name", "m_EditorClassIdentifier", "m_Script", "graph", "position", "ports" };
+        {
+            "m_Enabled", "m_EditorHideFlags", "m_ObjectHideFlags", "m_Name", "m_EditorClassIdentifier",
+            "m_Script", "graph", "position", "ports"
+        };
 
         public static string ToSidecarJson(XNodeGraph graph)
         {
@@ -107,16 +110,17 @@ namespace SaintsGraph.Editor.XNodeMigration
             position.Items.Add(JsonNumber.From(Math.Round(node.position.y, 2)));
             result["position"] = position;
 
-            JsonObject raw = (JsonObject)JsonValue.Parse(EditorJsonUtility.ToJson(node));
+            // Unity wraps an object's fields in a single "MonoBehaviour" key; the sidecar is flat.
+            JsonObject payload = GraphJson.UnwrapPayload(node, out string _);
             foreach (string key in SkipFields)
             {
-                raw.Remove(key);
+                payload.Remove(key);
             }
 
             JsonObject fields = new JsonObject();
-            foreach (KeyValuePair<string, JsonValue> entry in raw.Entries)
+            foreach (KeyValuePair<string, JsonValue> entry in payload.Entries)
             {
-                fields[entry.Key] = GraphJson.ObjectRefsToStrings(entry.Value);
+                fields[entry.Key] = entry.Value;
             }
 
             if (fields.Entries.Count > 0)
