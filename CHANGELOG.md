@@ -27,3 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lazy, per-type port reflection — no assembly scanning, no assembly-name
   filtering pitfalls.
 - Edit-mode test suite for the runtime core.
+
+### Fixed
+
+- Undo of node creation/deletion no longer leaves the graph asset with destroyed or
+  orphaned node sub-assets (which made the Project browser throw
+  `NullReferenceException` in `ObjectListArea`). A sanitizer repairs graph assets after
+  undo/redo and on load.

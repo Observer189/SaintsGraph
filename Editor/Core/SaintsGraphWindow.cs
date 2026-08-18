@@ -73,6 +73,14 @@ namespace SaintsGraph.Editor
 
         private void OnUndoRedo()
         {
+            if (graph != null)
+            {
+                GraphAssetSanitizer.Sanitize(graph);
+                // Rewrites the asset file so destroyed sub-assets (undone creation) leave it
+                // before the Project browser tries to draw them.
+                AssetDatabase.SaveAssets();
+            }
+
             _view?.ScheduleReload();
         }
 
