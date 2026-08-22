@@ -30,11 +30,13 @@ namespace SaintsGraph.Editor
         private const string FormatVersion = "saintsgraph/1";
 
         /// <summary>Engine bookkeeping and fields the sidecar represents at node level instead.</summary>
+        internal static IReadOnlyList<string> InternalFieldNames => InternalFields;
+
         private static readonly string[] InternalFields =
         {
             "m_Enabled", "m_EditorHideFlags", "m_ObjectHideFlags", "m_Name", "m_EditorClassIdentifier",
             "m_Script", "m_CorrespondingSourceObject", "m_PrefabInstance", "m_PrefabAsset", "m_GameObject",
-            "graph", "position", "dynamicPorts"
+            "graph", "position", "dynamicPorts", "uid"
         };
 
         public static string SidecarPathFor(NodeGraph graph)
@@ -118,6 +120,7 @@ namespace SaintsGraph.Editor
             JsonObject result = new JsonObject
             {
                 ["id"] = new JsonString(id),
+                ["uid"] = new JsonString(node.Uid),
                 ["name"] = new JsonString(node.name),
                 ["type"] = new JsonString(TypeString(node.GetType()))
             };
@@ -165,7 +168,16 @@ namespace SaintsGraph.Editor
 
             Dictionary<Node, string> currentIds = BuildIds(graph);
             Dictionary<string, Node> byId = currentIds.ToDictionary(pair => pair.Value, pair => pair.Key);
-            HashSet<string> seenIds = new HashSet<string>();
+            Dictionary<string, Node> byUid = new Dictionary<string, Node>();
+            foreach (Node existing in graph.nodes)
+            {
+                if (existing != null)
+                {
+                    byUid[existing.Uid] = existing;
+                }
+            }
+
+            HashSet<Node> seenNodes = new HashSet<Node>();
 
             if (root["nodes"] is JsonArray jsonNodes)
             {
@@ -183,8 +195,16 @@ namespace SaintsGraph.Editor
                         continue;
                     }
 
-                    seenIds.Add(id);
-                    if (!byId.TryGetValue(id, out Node node))
+                    // Identity first, readable id second: renaming a node in the file (or in the
+                    // editor) must update it, not replace it.
+                    string uid = jsonNode.GetString("uid");
+                    Node node = null;
+                    if (!string.IsNullOrEmpty(uid))
+                    {
+                        byUid.TryGetValue(uid, out node);
+                    }
+
+                    if (node == null && !byId.TryGetValue(id, out node))
                     {
                         Type nodeType = ResolveType(jsonNode.GetString("type"));
                         if (nodeType == null)
@@ -196,12 +216,15 @@ namespace SaintsGraph.Editor
                         node = graph.AddNode(nodeType);
                         Undo.RegisterCreatedObjectUndo(node, "Import Graph JSON");
                         node.name = id;
+                        if (!string.IsNullOrEmpty(uid))
+                        {
+                            node.AdoptUid(uid);
+                        }
+
                         if (!string.IsNullOrEmpty(assetPath))
                         {
                             AssetDatabase.AddObjectToAsset(node, graph);
                         }
-
-                        byId[id] = node;
                     }
                     else
                     {
@@ -209,15 +232,17 @@ namespace SaintsGraph.Editor
                     }
 
                     ApplyNode(jsonNode, node);
+                    seenNodes.Add(node);
+                    byId[id] = node;
                 }
             }
 
-            foreach (KeyValuePair<Node, string> pair in currentIds)
+            foreach (Node existing in currentIds.Keys)
             {
-                if (!seenIds.Contains(pair.Value) && pair.Key != null)
+                if (existing != null && !seenNodes.Contains(existing))
                 {
-                    graph.RemoveNode(pair.Key);
-                    Undo.DestroyObjectImmediate(pair.Key);
+                    graph.RemoveNode(existing);
+                    Undo.DestroyObjectImmediate(existing);
                 }
             }
 

@@ -121,5 +121,24 @@ namespace SaintsGraph.Tests
             Assert.IsTrue(_float.GetOutputPort("value").IsConnectedTo(_add.GetInputPort("a")),
                 "original edge untouched");
         }
+
+        [Test]
+        public void Import_MatchesByUidSoRenamesUpdateInsteadOfReplacing()
+        {
+            string json = GraphJson.Export(_graph);
+            // Rename the node and its document handle at once — only the uid still ties it
+            // to the existing node.
+            json = json.Replace("\"id\": \"Add\"", "\"id\": \"Total\"")
+                .Replace("\"name\": \"Add\"", "\"name\": \"Total\"")
+                .Replace("\"Add\", \"a\"", "\"Total\", \"a\"");
+
+            GraphJson.Import(_graph, json);
+
+            Assert.AreEqual(2, _graph.nodes.Count, "the node was updated, not replaced");
+            Assert.IsFalse(_add == null, "the original node object survived");
+            Assert.AreEqual("Total", _add.name, "rename applied to the same node");
+            Assert.AreEqual(1, _graph.Edges.Count, "its connection survived the rename");
+            Assert.IsTrue(_float.GetOutputPort("value").IsConnectedTo(_add.GetInputPort("a")));
+        }
     }
 }

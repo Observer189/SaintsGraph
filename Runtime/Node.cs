@@ -149,6 +149,38 @@ namespace SaintsGraph
         public NodeGraph graph;
         public Vector2 position;
 
+        [SerializeField] private string uid;
+
+        /// <summary>
+        /// Identity that survives renames and reordering. The JSON sidecar matches nodes by this,
+        /// so editing a node's name in the file (or in the editor) never orphans its connections.
+        /// Generated on first use; copies always get a fresh one.
+        /// </summary>
+        public string Uid
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(uid))
+                {
+                    uid = Guid.NewGuid().ToString("N");
+                }
+
+                return uid;
+            }
+        }
+
+        /// <summary>Assigns a specific identity — used when importing a graph that already carries one.</summary>
+        public void AdoptUid(string value)
+        {
+            uid = value;
+        }
+
+        /// <summary>Gives this node a brand new identity. Called for copies, which are not the original.</summary>
+        public void ResetUid()
+        {
+            uid = Guid.NewGuid().ToString("N");
+        }
+
         [SerializeField] private List<DynamicPortData> dynamicPorts = new List<DynamicPortData>();
 
         [Serializable]

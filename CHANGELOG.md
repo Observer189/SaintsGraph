@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Node schema export (`Tools → SaintsGraph → Copy Node Schema to Clipboard` /
+  `Export Node Schema...`): a machine-readable description of every node type — ports with
+  direction, element type and connection rules, default field values, menu path, instance
+  limits — plus instructions describing the graph document itself. Together with paste, a tool
+  or model can author a graph and it can be dropped straight into a window.
+- Stable node identity: nodes carry a `uid` that the sidecar records alongside the readable
+  `id`. Imports match on it first, so renaming a node in the editor or in the file updates the
+  node instead of replacing it, and its connections survive. Copies always get a fresh identity.
+- `Tools → SaintsGraph → Auto Import Graph JSON`: sidecars edited outside Unity are applied to
+  their graph on the next refresh. Files already matching the graph are skipped, so exports
+  never bounce back as imports.
+
 - Copy, cut, paste and duplicate (Ctrl+C/X/V/D) for node selections. Clipboard data *is* the
   JSON sidecar format, so a selection can be pasted as text into a file or chat, and any valid
   graph JSON — hand-written or generated — can be pasted straight into a graph. Pasted content

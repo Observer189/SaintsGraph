@@ -8,13 +8,59 @@ namespace SaintsGraph.Editor
     internal static class GraphJsonCommands
     {
         private const string AutoExportMenu = "Tools/SaintsGraph/Auto Export Graph JSON";
+        private const string AutoImportMenu = "Tools/SaintsGraph/Auto Import Graph JSON";
 
         private static string PrefKey => "SaintsGraph.AutoExportJson." + PlayerSettings.productGUID;
+        private static string ImportPrefKey => "SaintsGraph.AutoImportJson." + PlayerSettings.productGUID;
 
         internal static bool AutoExport
         {
             get => EditorPrefs.GetBool(PrefKey, false);
             set => EditorPrefs.SetBool(PrefKey, value);
+        }
+
+        /// <summary>When on, editing a sidecar outside Unity applies it to the graph on the next refresh.</summary>
+        internal static bool AutoImport
+        {
+            get => EditorPrefs.GetBool(ImportPrefKey, false);
+            set => EditorPrefs.SetBool(ImportPrefKey, value);
+        }
+
+        [MenuItem(AutoImportMenu)]
+        private static void ToggleAutoImport()
+        {
+            AutoImport = !AutoImport;
+        }
+
+        [MenuItem(AutoImportMenu, true)]
+        private static bool ToggleAutoImportValidate()
+        {
+            Menu.SetChecked(AutoImportMenu, AutoImport);
+            return true;
+        }
+
+        [MenuItem("Tools/SaintsGraph/Copy Node Schema to Clipboard")]
+        private static void CopySchema()
+        {
+            string schema = GraphSchema.Export();
+            EditorGUIUtility.systemCopyBuffer = schema;
+            Debug.Log($"SaintsGraph: node schema copied to clipboard ({schema.Length} chars). " +
+                      "Paste it to a tool or model, then paste the graph JSON it produces into a graph window.");
+        }
+
+        [MenuItem("Tools/SaintsGraph/Export Node Schema...")]
+        private static void ExportSchema()
+        {
+            string path = EditorUtility.SaveFilePanel("Export SaintsGraph node schema",
+                Application.dataPath, "saintsgraph.schema", "json");
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            File.WriteAllText(path, GraphSchema.Export());
+            AssetDatabase.Refresh();
+            Debug.Log("SaintsGraph: node schema written to " + path);
         }
 
         [MenuItem(AutoExportMenu)]
@@ -88,13 +134,62 @@ namespace SaintsGraph.Editor
             return Selection.objects.OfType<NodeGraph>().ToArray();
         }
 
-        private static void ReloadOpenWindows(NodeGraph graph)
+        internal static void ReloadOpenWindows(NodeGraph graph)
         {
             foreach (SaintsGraphWindow window in Resources.FindObjectsOfTypeAll<SaintsGraphWindow>())
             {
                 if (window.Graph == graph)
                 {
                     window.ReloadViewFromModel();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// With auto-import enabled, a sidecar edited outside Unity is applied to its graph as soon as
+    /// Unity reimports the file. Sidecars whose content already matches the graph are skipped, so
+    /// our own exports never bounce back as imports.
+    /// </summary>
+    internal class GraphJsonImportHook : AssetPostprocessor
+    {
+        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets,
+            string[] movedAssets, string[] movedFromAssetPaths)
+        {
+            if (!GraphJsonCommands.AutoImport)
+            {
+                return;
+            }
+
+            foreach (string path in importedAssets)
+            {
+                if (!path.EndsWith(GraphJson.SidecarSuffix, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string assetPath = path.Substring(0, path.Length - GraphJson.SidecarSuffix.Length) + ".asset";
+                NodeGraph graph = AssetDatabase.LoadAssetAtPath<NodeGraph>(assetPath);
+                if (graph == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string json = File.ReadAllText(path);
+                    if (json == GraphJson.Export(graph))
+                    {
+                        continue;
+                    }
+
+                    GraphJson.Import(graph, json);
+                    GraphJsonCommands.ReloadOpenWindows(graph);
+                    Debug.Log($"SaintsGraph: applied external changes from {path}", graph);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogError($"SaintsGraph: could not apply {path} — {exception.Message}", graph);
                 }
             }
         }

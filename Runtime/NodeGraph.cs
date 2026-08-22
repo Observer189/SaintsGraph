@@ -59,6 +59,7 @@ namespace SaintsGraph
             Node.graphHotfix = this;
             Node node = (Node)CreateInstance(type);
             node.graph = this;
+            node.ResetUid();
             nodes.Add(node);
             return node;
         }
@@ -69,6 +70,7 @@ namespace SaintsGraph
             Node.graphHotfix = this;
             Node node = Instantiate(original);
             node.graph = this;
+            node.ResetUid();
             node.UpdatePorts();
             nodes.Add(node);
             return node;

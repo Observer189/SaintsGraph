@@ -121,6 +121,26 @@ back: field values, positions, renames (the `name` field), added/removed nodes a
 `Tools → SaintsGraph → Auto Export Graph JSON` keeps the sidecar fresh on every save, so graph
 changes show up as readable diffs in version control.
 
+## Authoring graphs with tools or an LLM
+
+The sidecar format is also the clipboard format, which makes a round trip possible without any
+integration:
+
+1. **Tools → SaintsGraph → Copy Node Schema to Clipboard** — copies a machine-readable
+   description of every node type in the project: assembly-qualified type names, ports (direction,
+   value type, connection rules), default field values, and short instructions on the document
+   format itself.
+2. Paste that into your tool or model and ask for a graph.
+3. Paste the JSON it returns straight into an open graph window with **Ctrl+V** — the nodes appear
+   under the cursor, wired up.
+
+For file-based workflows, write the JSON to `<Graph>.graph.json` next to the asset instead and use
+**Import Graph JSON**, or switch on **Tools → SaintsGraph → Auto Import Graph JSON** to have Unity
+apply external edits to that file as soon as it refreshes.
+
+Nodes carry a stable `uid` alongside the readable `id`, so renaming a node — in the editor or in
+the file — updates it rather than replacing it, and its connections survive.
+
 ## Roadmap
 
 - [x] Runtime core (xNode-shaped API, graph-level edges, tests)
@@ -131,6 +151,7 @@ changes show up as readable diffs in version control.
 - [x] xNode asset migration tool, sample, package validation CI
 - [ ] Noodle styles, reroute points, preferences window
 - [x] Copy/paste/duplicate (clipboard is the JSON format), drag-to-create, graph search
+- [x] Node schema export, stable node identity, auto-import of external edits
 - [ ] Groups and sticky notes, drag-reorder for port lists, persisted collapse state
 - [ ] OpenUPM release
 
