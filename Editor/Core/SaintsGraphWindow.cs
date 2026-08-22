@@ -53,6 +53,7 @@ namespace SaintsGraph.Editor
 
         private void CreateGUI()
         {
+            InteractionDiagnostics.Install(rootVisualElement);
             Toolbar toolbar = new Toolbar();
             _titleLabel = new Label("No graph selected");
             _titleLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
