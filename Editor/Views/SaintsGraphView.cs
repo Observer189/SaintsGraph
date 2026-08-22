@@ -436,12 +436,20 @@ namespace SaintsGraph.Editor
             contentsField.multiline = true;
             contentsField.style.flexGrow = 1;
 
+            // Taking the title label out of the layout while editing let the contents rise into
+            // its row and show through the editor. The title editor is pinned over that row
+            // instead, and the label is only made invisible, so nothing moves.
+            titleField.style.position = Position.Absolute;
+            titleField.style.left = 0;
+            titleField.style.right = 0;
+            titleField.style.top = 0;
+
             void Commit()
             {
                 if (titleField.style.display == DisplayStyle.Flex)
                 {
                     titleField.style.display = DisplayStyle.None;
-                    titleLabel.style.display = DisplayStyle.Flex;
+                    titleLabel.style.visibility = Visibility.Visible;
                     view.title = titleField.value;
                 }
 
@@ -468,7 +476,8 @@ namespace SaintsGraph.Editor
                 }
                 else
                 {
-                    hide.style.display = DisplayStyle.None;
+                    // Invisible, not removed: the row must keep its height while being edited.
+                    hide.style.visibility = Visibility.Hidden;
                 }
 
                 VisualElement input = field.Q(TextField.textInputUssName);
