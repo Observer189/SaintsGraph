@@ -148,6 +148,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bookkeeping rather than content: they are now hidden from inspectors and skipped by the body
   builders. Editing a uid by hand could have broken the identity the sidecar matches on.
 
+- Sticky note text could not be edited. GraphView starts note editing from a double-click on the
+  title or contents *label*, and a label with no text has no size to be clicked — so an empty note
+  is unreachable, and clearing a title makes even the title unreachable. SaintsGraph now handles
+  the double-click on the note itself and decides by region: the top band edits the title, the
+  rest edits the contents. Escape or clicking away commits.
+- Node bodies showed `uid` as an editable text field and `collapsed` as a checkbox. Both are
+  bookkeeping rather than content: they are now hidden from inspectors and skipped by the body
+  builders. Editing a uid by hand could have broken the identity the sidecar matches on.
+
 - Sticky note text could not be edited. GraphView's own StickyNote starts contents editing by
   showing its text field and hiding the contents label — but in this Unity version that field is
   a child of the label, so hiding the label hides the editor along with it (the title works only

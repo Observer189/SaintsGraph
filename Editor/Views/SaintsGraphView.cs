@@ -402,77 +402,121 @@ namespace SaintsGraph.Editor
                 userData = note
             };
             view.SetPosition(note.area);
-            SetUpContentsEditing(view, note);
+            SetUpNoteEditing(view, note);
             view.RegisterCallback<StickyNoteChangeEvent>(_ => SaveNote(view, note));
             AddElement(view);
             _noteViews[note] = view;
         }
 
         /// <summary>
-        /// Works around a broken built-in interaction: StickyNote starts contents editing by
-        /// showing "contents-field" and hiding the "contents" label — but in this Unity version
-        /// that field is a *child* of the label, so hiding the label hides the editor with it and
-        /// nothing can be typed. (The title works because its field is a sibling of its label.)
-        /// The double-click is intercepted before the built-in handler and editing is driven here:
-        /// the label stays visible with its text blanked, so the field inside it can be seen.
-        /// Also lets the contents fill the note body, since an empty label has no height to click.
+        /// Sticky note text is edited through our own handler, because the built-in one cannot be
+        /// reached: it starts editing from a double-click on the title or contents *label*, and a
+        /// label with no text has no size to click. That is why a note is uneditable when empty —
+        /// and why clearing a title makes even the title unreachable.
+        ///
+        /// This listens on the note itself, in the trickle-down phase, so the click is seen before
+        /// any label hit-testing or drag manipulator: the top band edits the title, the rest edits
+        /// the contents. The contents field is a child of the contents label in this Unity version,
+        /// so that label must stay displayed while editing — its text is blanked instead.
         /// </summary>
-        private void SetUpContentsEditing(StickyNote view, NodeNote note)
+        private void SetUpNoteEditing(StickyNote view, NodeNote note)
         {
-            Label label = view.Q<Label>("contents");
-            TextField field = view.Q<TextField>("contents-field");
-            if (label == null || field == null)
+            Label titleLabel = view.Q<Label>("title");
+            TextField titleField = view.Q<TextField>("title-field");
+            Label contentsLabel = view.Q<Label>("contents");
+            TextField contentsField = view.Q<TextField>("contents-field");
+            if (titleLabel == null || titleField == null || contentsLabel == null || contentsField == null)
             {
                 return;
             }
 
-            label.style.flexGrow = 1;
-            label.style.minHeight = 32;
-            label.style.whiteSpace = WhiteSpace.Normal;
-            field.multiline = true;
-            field.style.flexGrow = 1;
+            contentsLabel.style.flexGrow = 1;
+            contentsLabel.style.minHeight = 32;
+            contentsLabel.style.whiteSpace = WhiteSpace.Normal;
+            contentsField.multiline = true;
+            contentsField.style.flexGrow = 1;
 
-            label.RegisterCallback<MouseDownEvent>(evt =>
+            void Commit()
             {
-                if (evt.button != 0 || evt.clickCount != 2
-                    || field.style.display == DisplayStyle.Flex)
+                if (titleField.style.display == DisplayStyle.Flex)
+                {
+                    titleField.style.display = DisplayStyle.None;
+                    titleLabel.style.display = DisplayStyle.Flex;
+                    view.title = titleField.value;
+                }
+
+                if (contentsField.style.display == DisplayStyle.Flex)
+                {
+                    contentsField.style.display = DisplayStyle.None;
+                    view.contents = contentsField.value;
+                    contentsLabel.text = contentsField.value;
+                }
+
+                SaveNote(view, note);
+            }
+
+            void BeginEdit(TextField field, string value, VisualElement hide, bool blankInsteadOfHiding)
+            {
+                Commit();
+                field.SetValueWithoutNotify(value ?? "");
+                field.style.display = DisplayStyle.Flex;
+                if (blankInsteadOfHiding)
+                {
+                    // The field lives inside this label: hiding it would hide the editor too.
+                    ((Label)hide).text = string.Empty;
+                }
+                else
+                {
+                    hide.style.display = DisplayStyle.None;
+                }
+
+                field.Q(TextField.textInputUssName)?.Focus();
+                field.SelectAll();
+            }
+
+            view.RegisterCallback<MouseDownEvent>(evt =>
+            {
+                if (evt.button != 0 || evt.clickCount != 2)
+                {
+                    return;
+                }
+
+                Rect local = view.contentRect;
+                Vector2 point = evt.localMousePosition;
+                // Leave the resize border alone.
+                if (point.x < 6f || point.y < 2f || point.x > local.width - 6f || point.y > local.height - 6f)
                 {
                     return;
                 }
 
                 evt.StopImmediatePropagation();
 
-                field.SetValueWithoutNotify(note.text ?? "");
-                field.style.display = DisplayStyle.Flex;
-                label.text = string.Empty;
-
-                VisualElement input = field.Q(TextField.textInputUssName);
-                input?.Focus();
-                field.SelectAll();
+                // An empty title has no height of its own, so the band is a fixed minimum.
+                float titleBand = Mathf.Max(titleLabel.layout.height, 22f);
+                if (point.y <= titleBand)
+                {
+                    BeginEdit(titleField, note.title, titleLabel, false);
+                }
+                else
+                {
+                    BeginEdit(contentsField, note.text, contentsLabel, true);
+                }
             }, TrickleDown.TrickleDown);
 
-            field.RegisterCallback<FocusOutEvent>(_ => EndContentsEditing(view, label, field, note));
-            field.RegisterCallback<KeyDownEvent>(evt =>
+            titleField.RegisterCallback<FocusOutEvent>(_ => Commit());
+            contentsField.RegisterCallback<FocusOutEvent>(_ => Commit());
+
+            void OnKey(KeyDownEvent evt)
             {
                 if (evt.keyCode == KeyCode.Escape)
                 {
-                    EndContentsEditing(view, label, field, note);
+                    Commit();
                     evt.StopPropagation();
                 }
-            });
-        }
-
-        private void EndContentsEditing(StickyNote view, Label label, TextField field, NodeNote note)
-        {
-            if (field.style.display != DisplayStyle.Flex)
-            {
-                return;
             }
 
-            field.style.display = DisplayStyle.None;
-            view.contents = field.value;
-            label.text = field.value;
-            SaveNote(view, note);
+            titleField.RegisterCallback<KeyDownEvent>(OnKey);
+            contentsField.RegisterCallback<KeyDownEvent>(OnKey);
         }
 
         private void SaveNote(StickyNote view, NodeNote note)
