@@ -43,6 +43,8 @@ namespace SaintsGraph.Editor
         private bool _reloadScheduled;
         private bool _bodyBuildScheduled;
         private double _lastViewChange;
+        private Vector2 _lastMouseWorld;
+        private bool _hasMousePosition;
 
         public SaintsGraphView(NodeGraph graph, EditorWindow window)
         {
@@ -86,6 +88,11 @@ namespace SaintsGraph.Editor
                 ScheduleBodyBuild();
             };
             RegisterCallback<GeometryChangedEvent>(_ => ScheduleBodyBuild());
+            RegisterCallback<MouseMoveEvent>(evt =>
+            {
+                _lastMouseWorld = evt.mousePosition;
+                _hasMousePosition = true;
+            });
 
             Reload();
         }
@@ -614,12 +621,27 @@ namespace SaintsGraph.Editor
                    && data.Contains("\"nodes\"");
         }
 
+        /// <summary>Where new content should land: the mouse if it has been over the canvas, else its centre.</summary>
+        private Vector2 MouseInGraphSpace()
+        {
+            Vector2 world = _hasMousePosition ? _lastMouseWorld : worldBound.center;
+            return contentViewContainer.WorldToLocal(world);
+        }
+
         private void OnPaste(string operationName, string data)
         {
+            // Paste lands under the cursor; duplicate (Ctrl+D) stays next to the original.
+            Vector2 offset = new Vector2(40f, 40f);
+            if (!string.Equals(operationName, "Duplicate", StringComparison.OrdinalIgnoreCase)
+                && GraphJson.TryGetTopLeft(data, out Vector2 topLeft))
+            {
+                offset = MouseInGraphSpace() - topLeft;
+            }
+
             List<Node> created;
             try
             {
-                created = GraphJson.Paste(graph, data, new Vector2(40f, 40f));
+                created = GraphJson.Paste(graph, data, offset);
             }
             catch (Exception exception)
             {

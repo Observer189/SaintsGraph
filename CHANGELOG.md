@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Copy, cut, paste and duplicate (Ctrl+C/X/V/D) for node selections. Clipboard data *is* the
   JSON sidecar format, so a selection can be pasted as text into a file or chat, and any valid
-  graph JSON — hand-written or generated — can be pasted straight into a graph. Pasted nodes
-  get unique names, keep their internal connections and land selected.
+  graph JSON — hand-written or generated — can be pasted straight into a graph. Pasted content
+  lands under the mouse cursor (duplicate stays beside the original), gets unique names, keeps
+  its internal connections and ends up selected.
 - Dropping a dragged connection on empty canvas opens the create menu filtered to node types
   that can accept it, then wires the new node up automatically.
 - Graph search in the toolbar (Ctrl+F): matching nodes are highlighted and the rest dimmed,

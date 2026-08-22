@@ -313,6 +313,43 @@ namespace SaintsGraph.Editor
             return created;
         }
 
+        /// <summary>
+        /// Top-left corner of the node positions in a graph/clipboard JSON. Lets a caller place a
+        /// paste at a point (mouse position) instead of a blind offset.
+        /// </summary>
+        public static bool TryGetTopLeft(string json, out Vector2 topLeft)
+        {
+            topLeft = Vector2.zero;
+            if (!(JsonValue.Parse(json) is JsonObject root) || !(root["nodes"] is JsonArray nodes))
+            {
+                return false;
+            }
+
+            bool found = false;
+            float minX = float.MaxValue;
+            float minY = float.MaxValue;
+            foreach (JsonValue value in nodes.Items)
+            {
+                if (!(value is JsonObject node) || !(node["position"] is JsonArray position)
+                    || position.Items.Count != 2
+                    || !(position.Items[0] is JsonNumber x) || !(position.Items[1] is JsonNumber y))
+                {
+                    continue;
+                }
+
+                minX = Mathf.Min(minX, x.AsFloat);
+                minY = Mathf.Min(minY, y.AsFloat);
+                found = true;
+            }
+
+            if (found)
+            {
+                topLeft = new Vector2(minX, minY);
+            }
+
+            return found;
+        }
+
         private static string UniqueName(string preferred, Type nodeType, HashSet<string> used)
         {
             string baseName = string.IsNullOrEmpty(preferred)
