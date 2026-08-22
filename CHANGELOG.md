@@ -96,6 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Node schema no longer lists types from test assemblies (anything referencing NUnit): fixtures
+  are not content a generator should be offered.
+- Schema defaults no longer carry `[SerializeReference]` bookkeeping. Managed reference ids are
+  only meaningful inside the document that defines them, so such fields now show as `null` and a
+  new `managedReferences` block names each polymorphic field with the concrete types that may be
+  assigned to it — which is what a generator actually needs.
+
 - Editing a graph no longer rebuilds the whole view. Connecting, disconnecting, creating and
   deleting now reconcile node and edge views incrementally, and rows whose backing value
   becomes hidden toggle in place instead of being rebuilt. Full reloads are reserved for

@@ -15,6 +15,9 @@ namespace SaintsGraph.Editor
     {
         private const string SchemaVersion = "saintsgraph-schema/1";
 
+        /// <summary>Lets this package's own tests assert against their fixture node types.</summary>
+        internal static bool IncludeTestAssemblies { get; set; }
+
         private static readonly string[] HowTo =
         {
             "A graph document is {\"format\":\"saintsgraph/1\", \"nodes\":[...], \"edges\":[...]}.",
@@ -23,11 +26,51 @@ namespace SaintsGraph.Editor
             "\"fields\" uses Unity's own JSON shape; copy \"defaults\" from this schema and change what you need. Omitted fields keep their current value.",
             "Each edge is [outputNodeId, outputPortName, inputNodeId, inputPortName] and must connect an output port to an input port of compatible type.",
             "Ports marked \"dynamicList\": true are per-element ports named \"<field> <index>\", e.g. \"terms 0\"; add the elements to the backing array field too.",
+            "Fields listed under \"managedReferences\" are polymorphic ([SerializeReference]). To set one, write {\"rid\": N} with any unique number N plus a sibling \"references\" block {\"version\":2, \"RefIds\":[{\"rid\":N, \"type\":{\"class\":\"...\",\"ns\":\"...\",\"asm\":\"...\"}, \"data\":{...}}]}; leave the field null to keep it empty.",
             "A whole document can be pasted directly into an open graph window with Ctrl+V, or imported over a graph asset via Assets/SaintsGraph/Import Graph JSON."
         };
 
+        /// <summary>
+        /// Test assemblies are loaded in the editor, so their fixture node types would otherwise
+        /// appear as usable content. Anything referencing NUnit is a test assembly.
+        /// </summary>
+        private static bool IsTestAssembly(Assembly assembly)
+        {
+            foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+            {
+                if (reference.Name == "nunit.framework")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static string Export()
         {
+            Dictionary<Assembly, bool> testAssemblies = new Dictionary<Assembly, bool>();
+
+            bool Include(Type type)
+            {
+                if (type.IsAbstract)
+                {
+                    return false;
+                }
+
+                if (IncludeTestAssemblies)
+                {
+                    return true;
+                }
+
+                if (!testAssemblies.TryGetValue(type.Assembly, out bool isTest))
+                {
+                    testAssemblies[type.Assembly] = isTest = IsTestAssembly(type.Assembly);
+                }
+
+                return !isTest;
+            }
+
             JsonObject root = new JsonObject
             {
                 ["format"] = new JsonString(SchemaVersion),
@@ -45,7 +88,7 @@ namespace SaintsGraph.Editor
             JsonArray graphTypes = new JsonArray();
             foreach (Type type in TypeCache.GetTypesDerivedFrom<NodeGraph>())
             {
-                if (!type.IsAbstract)
+                if (Include(type))
                 {
                     graphTypes.Items.Add(DescribeGraph(type));
                 }
@@ -56,7 +99,7 @@ namespace SaintsGraph.Editor
             JsonArray nodeTypes = new JsonArray();
             foreach (Type type in TypeCache.GetTypesDerivedFrom<Node>())
             {
-                if (!type.IsAbstract)
+                if (Include(type))
                 {
                     nodeTypes.Items.Add(DescribeNode(type));
                 }
@@ -144,10 +187,59 @@ namespace SaintsGraph.Editor
 
             result["ports"] = ports;
 
+            JsonArray managedReferences = DescribeManagedReferences(type);
+            if (managedReferences.Items.Count > 0)
+            {
+                result["managedReferences"] = managedReferences;
+            }
+
             JsonObject defaults = DescribeDefaults(type);
             if (defaults != null && defaults.Entries.Count > 0)
             {
                 result["defaults"] = defaults;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Polymorphic ([SerializeReference]) fields with the concrete types that may be assigned.
+        /// Without this a generator cannot know what a null reference field is allowed to become.
+        /// </summary>
+        private static JsonArray DescribeManagedReferences(Type nodeType)
+        {
+            JsonArray result = new JsonArray();
+            foreach (FieldInfo field in PortCache.GetNodeFields(nodeType))
+            {
+                if (field.GetCustomAttribute<SerializeReference>() == null)
+                {
+                    continue;
+                }
+
+                Type declared = PortCache.GetListElementType(field.FieldType);
+                JsonObject entry = new JsonObject
+                {
+                    ["field"] = new JsonString(field.Name),
+                    ["declaredType"] = new JsonString(declared.FullName)
+                };
+
+                if (field.FieldType != declared)
+                {
+                    entry["list"] = new JsonBool(true);
+                }
+
+                JsonArray candidates = new JsonArray();
+                foreach (Type candidate in TypeCache.GetTypesDerivedFrom(declared))
+                {
+                    if (!candidate.IsAbstract && !candidate.IsInterface
+                        && candidate.GetCustomAttribute<SerializableAttribute>() != null)
+                    {
+                        candidates.Items.Add(new JsonString(TypeString(candidate)));
+                    }
+                }
+
+                entry["assignableTypes"] = candidates;
+                result.Items.Add(entry);
             }
 
             return result;
@@ -166,7 +258,17 @@ namespace SaintsGraph.Editor
                     payload.Remove(key);
                 }
 
-                return payload;
+                // Managed reference ids only mean something inside the document that defines them,
+                // so a default rid would be a trap to copy. Such fields are shown as null, and
+                // "managedReferences" says what may go there instead.
+                payload.Remove("references");
+                JsonObject cleaned = new JsonObject();
+                foreach (KeyValuePair<string, JsonValue> entry in payload.Entries)
+                {
+                    cleaned[entry.Key] = StripManagedReferenceIds(entry.Value);
+                }
+
+                return cleaned;
             }
             catch (Exception exception)
             {
@@ -179,6 +281,37 @@ namespace SaintsGraph.Editor
                 {
                     UnityEngine.Object.DestroyImmediate(instance);
                 }
+            }
+        }
+
+        private static JsonValue StripManagedReferenceIds(JsonValue value)
+        {
+            switch (value)
+            {
+                case JsonObject obj when obj.Entries.Count == 1 && obj.Entries[0].Key == "rid":
+                    return JsonNull.Instance;
+                case JsonObject obj:
+                {
+                    JsonObject copy = new JsonObject();
+                    foreach (KeyValuePair<string, JsonValue> entry in obj.Entries)
+                    {
+                        copy[entry.Key] = StripManagedReferenceIds(entry.Value);
+                    }
+
+                    return copy;
+                }
+                case JsonArray array:
+                {
+                    JsonArray copy = new JsonArray();
+                    foreach (JsonValue item in array.Items)
+                    {
+                        copy.Items.Add(StripManagedReferenceIds(item));
+                    }
+
+                    return copy;
+                }
+                default:
+                    return value;
             }
         }
 
