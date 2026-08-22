@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Copy, cut, paste and duplicate (Ctrl+C/X/V/D) for node selections. Clipboard data *is* the
+  JSON sidecar format, so a selection can be pasted as text into a file or chat, and any valid
+  graph JSON — hand-written or generated — can be pasted straight into a graph. Pasted nodes
+  get unique names, keep their internal connections and land selected.
+- Dropping a dragged connection on empty canvas opens the create menu filtered to node types
+  that can accept it, then wires the new node up automatically.
+- Graph search in the toolbar (Ctrl+F): matching nodes are highlighted and the rest dimmed,
+  Enter cycles through matches and frames them.
+
 - xNode asset migration: `Assets → SaintsGraph → Migrate xNode Graph` (and a Tools command
   for all graphs at once) converts an xNode graph into a SaintsGraph JSON sidecar — nodes,
   positions, field values, asset references, dynamic ports and connections — which is then

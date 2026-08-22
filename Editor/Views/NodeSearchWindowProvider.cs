@@ -13,6 +13,9 @@ namespace SaintsGraph.Editor
     {
         private SaintsGraphView _view;
 
+        /// <summary>When set, only nodes able to accept this port are listed, and the created node is connected to it.</summary>
+        public NodePort pendingPort;
+
         public void Initialize(SaintsGraphView view)
         {
             _view = view;
@@ -22,7 +25,9 @@ namespace SaintsGraph.Editor
         {
             List<SearchTreeEntry> tree = new List<SearchTreeEntry>
             {
-                new SearchTreeGroupEntry(new GUIContent("Create Node"))
+                new SearchTreeGroupEntry(new GUIContent(pendingPort == null
+                    ? "Create Node"
+                    : "Connect to " + ObjectNames.NicifyVariableName(pendingPort.fieldName)))
             };
 
             List<(string path, Type type)> entries = new List<(string, Type)>();
@@ -35,6 +40,11 @@ namespace SaintsGraph.Editor
 
                 string menuName = _view.graphEditor.GetNodeMenuName(type);
                 if (string.IsNullOrEmpty(menuName))
+                {
+                    continue;
+                }
+
+                if (pendingPort != null && !NodeEditorUtilities.HasCompatiblePort(type, pendingPort))
                 {
                     continue;
                 }
@@ -78,7 +88,8 @@ namespace SaintsGraph.Editor
 
         public bool OnSelectEntry(SearchTreeEntry entry, SearchWindowContext context)
         {
-            _view.CreateNode((Type)entry.userData, context.screenMousePosition);
+            _view.CreateNode((Type)entry.userData, context.screenMousePosition, pendingPort);
+            pendingPort = null;
             return true;
         }
     }

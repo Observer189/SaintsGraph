@@ -48,6 +48,32 @@ namespace SaintsGraph.Editor
             return Color.HSVToRGB(hue, 0.65f, 0.9f);
         }
 
+        /// <summary>
+        /// True when a node type declares a static port that could accept <paramref name="source"/>.
+        /// Used to filter the create menu while dragging a connection; the exact policy is still
+        /// enforced by <see cref="SaintsGraphEditor.CanConnect"/> when the edge is made.
+        /// </summary>
+        internal static bool HasCompatiblePort(Type nodeType, NodePort source)
+        {
+            foreach (PortCache.PortTemplate template in PortCache.GetTemplates(nodeType))
+            {
+                if (template.dynamicPortList || (template.direction == NodePort.IO.Input) == source.IsInput)
+                {
+                    continue;
+                }
+
+                Type outputType = source.IsOutput ? source.ValueType : template.valueType;
+                Type inputType = source.IsOutput ? template.valueType : source.ValueType;
+                if (outputType == null || inputType == null
+                    || inputType.IsAssignableFrom(outputType) || outputType.IsAssignableFrom(inputType))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         internal static Node.ShowBackingValue GetBackingValue(Node node, string fieldName)
         {
             foreach (PortCache.PortTemplate template in PortCache.GetTemplates(node.GetType()))

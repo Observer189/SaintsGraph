@@ -57,3 +57,12 @@ GridBackground {
 
 
 
+
+.saints-node-search-hit #node-border {
+    border-color: #e0b64a;
+    border-width: 2px;
+}
+
+.saints-node-search-miss {
+    opacity: 0.35;
+}

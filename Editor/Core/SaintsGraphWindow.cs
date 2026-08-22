@@ -14,6 +14,7 @@ namespace SaintsGraph.Editor
         private SaintsGraphView _view;
         private VisualElement _viewContainer;
         private Label _titleLabel;
+        private ToolbarSearchField _searchField;
 
         [OnOpenAsset(0)]
         private static bool OnOpenAsset(int instanceID, int line)
@@ -58,9 +59,31 @@ namespace SaintsGraph.Editor
             toolbar.Add(_titleLabel);
             VisualElement spacer = new VisualElement { style = { flexGrow = 1 } };
             toolbar.Add(spacer);
+            _searchField = new ToolbarSearchField();
+            _searchField.style.width = 180;
+            _searchField.RegisterValueChangedCallback(evt => _view?.ApplySearch(evt.newValue));
+            _searchField.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                {
+                    _view?.FocusNextMatch();
+                    evt.StopPropagation();
+                }
+            });
+            toolbar.Add(_searchField);
             toolbar.Add(new ToolbarButton(() => _view?.FrameAll()) { text = "Frame All" });
             toolbar.Add(new ToolbarButton(SaveGraph) { text = "Save" });
             rootVisualElement.Add(toolbar);
+
+            // Ctrl/Cmd+F jumps to the search field, Enter cycles through matches.
+            rootVisualElement.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.F && (evt.ctrlKey || evt.commandKey))
+                {
+                    _searchField.Q<TextField>()?.Focus();
+                    evt.StopPropagation();
+                }
+            });
 
             _viewContainer = new VisualElement { style = { flexGrow = 1 } };
             rootVisualElement.Add(_viewContainer);

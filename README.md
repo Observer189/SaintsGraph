@@ -4,8 +4,8 @@ A node graph editor for Unity with an **xNode-compatible API**, a **UI Toolkit**
 first-class **[SaintsField](https://github.com/TylerTemp/SaintsField)** attribute support inside
 node bodies.
 
-> ⚠️ **Early development.** The runtime core is functional and tested and the editor window MVP
-> works (create/connect/move/delete nodes, undo, autosave). The API may change until 1.0.
+> ⚠️ **Early development.** Runtime and editor both work — create, connect, copy/paste, undo,
+> dynamic port lists, JSON sidecar, xNode migration. The API may still change until 1.0.
 
 ## Why
 
@@ -16,14 +16,17 @@ the project is dormant. SaintsGraph keeps the API you already know and rebuilds 
   `[CreateNodeMenu]`, `[NodeTint]`, `[NodeWidth]`, `[DisallowMultipleNodes]`, `[RequireNode]`,
   `[PortTypeOverride]`, `[NodeEnum]`. Porting existing node code is a `using XNode;` →
   `using SaintsGraph;` swap for most projects.
-- **UI Toolkit editor** (GraphView-based, behind an isolation layer) — planned, in progress.
+- **UI Toolkit editor** (GraphView-based, behind an isolation layer) — pan/zoom canvas, searchable
+  create menu, drag-to-create, copy/paste, graph search, cycle highlighting, and node bodies that
+  build lazily so large graphs stay responsive.
 - **SaintsField attributes in nodes** — SaintsField property drawers work out of the box; with the
   optional integration assembly, node bodies are rendered through SaintsField's engine, enabling
   `[Button]`, `[ShowIf]`, layout groups and friends inside nodes. SaintsField remains an optional
   dependency: without it everything still works with plain property fields.
 - **LLM/human-friendly graphs** — a clean serialized model (single edge list per graph instead of
-  xNode's mirrored per-port connections) plus a planned JSON export/import side file, so graphs can
-  be reviewed in PRs and edited by tools or LLMs.
+  xNode's mirrored per-port connections) plus a JSON side file you can export, edit and import
+  back. It doubles as the clipboard format, so graphs can be reviewed in PRs, pasted as text and
+  authored by tools or LLMs.
 
 ## What is intentionally different from xNode
 
@@ -39,8 +42,8 @@ The public API matches; the internals do not:
   the output port, `to` always the input port.
 - Auto-named dynamic ports are direction-aware (`dynamicOutput_0`, not xNode's `dynamicInput_0`
   for outputs).
-- `.asset` files are **not** binary-compatible with xNode. A migration tool is planned; the
-  intended migration path for code is switching the base class, for assets — the converter.
+- `.asset` files are **not** binary-compatible with xNode. Code migrates by switching the
+  namespace, assets through the bundled migration tool (see below).
 - `PortTypeOverride` and `NodeEnum` live in the `SaintsGraph` namespace instead of xNode's
   global namespace, so both packages can be installed side by side during migration. Code
   with `using SaintsGraph;` compiles unchanged — but while xNode is *also* installed, write
@@ -127,7 +130,8 @@ changes show up as readable diffs in version control.
 - [x] Dynamic port lists, lazy node bodies, cycle highlighting
 - [x] xNode asset migration tool, sample, package validation CI
 - [ ] Noodle styles, reroute points, preferences window
-- [ ] Copy/paste, drag-reorder for port lists, persisted collapse state
+- [x] Copy/paste/duplicate (clipboard is the JSON format), drag-to-create, graph search
+- [ ] Groups and sticky notes, drag-reorder for port lists, persisted collapse state
 - [ ] OpenUPM release
 
 See [Docs~/DESIGN.md](Docs~/DESIGN.md) for the architecture.

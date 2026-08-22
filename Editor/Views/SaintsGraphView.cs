@@ -33,6 +33,9 @@ namespace SaintsGraph.Editor
 
         private readonly EditorWindow _window;
         private readonly NodeSearchWindowProvider _searchProvider;
+
+        /// <summary>Shared by every port pill, so dropping a connection on empty canvas offers a node to create.</summary>
+        internal readonly PortDropListener edgeConnectorListener;
         private readonly Dictionary<Node, SaintsNodeView> _nodeViews = new Dictionary<Node, SaintsNodeView>();
         private readonly Dictionary<NodeEdge, Edge> _edgeViews = new Dictionary<NodeEdge, Edge>();
         private readonly Dictionary<Node, bool> _expandedStates = new Dictionary<Node, bool>();
@@ -67,6 +70,10 @@ namespace SaintsGraph.Editor
             }
 
             graphViewChanged = OnGraphViewChanged;
+            serializeGraphElements = OnSerializeElements;
+            canPasteSerializedData = OnCanPaste;
+            unserializeAndPaste = OnPaste;
+            edgeConnectorListener = new PortDropListener(this);
             _searchProvider = ScriptableObject.CreateInstance<NodeSearchWindowProvider>();
             _searchProvider.hideFlags = HideFlags.HideAndDontSave;
             _searchProvider.Initialize(this);
@@ -350,6 +357,60 @@ namespace SaintsGraph.Editor
             }
         }
 
+        private string _searchQuery = string.Empty;
+        private int _searchIndex;
+
+        /// <summary>Highlights nodes matching the query (name or type) and dims the rest.</summary>
+        internal void ApplySearch(string query)
+        {
+            _searchQuery = query ?? string.Empty;
+            _searchIndex = 0;
+            bool searching = !string.IsNullOrWhiteSpace(_searchQuery);
+            foreach (KeyValuePair<Node, SaintsNodeView> entry in _nodeViews)
+            {
+                bool hit = searching && Matches(entry.Key, _searchQuery);
+                entry.Value.EnableInClassList("saints-node-search-hit", hit);
+                entry.Value.EnableInClassList("saints-node-search-miss", searching && !hit);
+            }
+        }
+
+        /// <summary>Selects and frames the next node matching the current query.</summary>
+        internal void FocusNextMatch()
+        {
+            if (string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                return;
+            }
+
+            List<SaintsNodeView> matches = _nodeViews
+                .Where(entry => Matches(entry.Key, _searchQuery))
+                .Select(entry => entry.Value)
+                .ToList();
+            if (matches.Count == 0)
+            {
+                return;
+            }
+
+            _searchIndex %= matches.Count;
+            SaintsNodeView match = matches[_searchIndex];
+            _searchIndex++;
+
+            ClearSelection();
+            AddToSelection(match);
+            FrameSelection();
+        }
+
+        private static bool Matches(Node node, string query)
+        {
+            if (node == null)
+            {
+                return false;
+            }
+
+            return node.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                   || node.GetType().Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private GraphViewChange OnGraphViewChanged(GraphViewChange change)
         {
             if (_suspendChangeHandling)
@@ -486,7 +547,7 @@ namespace SaintsGraph.Editor
             return compatible;
         }
 
-        public void CreateNode(Type type, Vector2 screenMousePosition)
+        public void CreateNode(Type type, Vector2 screenMousePosition, NodePort connectTo = null)
         {
             VisualElement windowRoot = _window.rootVisualElement;
             Vector2 windowPosition = windowRoot.ChangeCoordinatesTo(windowRoot.parent,
@@ -498,9 +559,88 @@ namespace SaintsGraph.Editor
             if (node != null)
             {
                 EditorUtility.SetDirty(node);
+                ConnectToFirstCompatiblePort(node, connectTo);
             }
 
             SyncFromModel();
+        }
+
+        private void ConnectToFirstCompatiblePort(Node node, NodePort source)
+        {
+            if (source == null)
+            {
+                return;
+            }
+
+            foreach (NodePort candidate in node.Ports)
+            {
+                if (candidate.direction == source.direction)
+                {
+                    continue;
+                }
+
+                NodePort output = source.IsOutput ? source : candidate;
+                NodePort input = source.IsOutput ? candidate : source;
+                if (graphEditor.CanConnect(output, input))
+                {
+                    output.Connect(input);
+                    EditorUtility.SetDirty(source.node);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Opens the create menu filtered to nodes that can accept the dragged connection.</summary>
+        internal void OpenCreateMenuForPort(NodePort source, Vector2 screenPosition)
+        {
+            _searchProvider.pendingPort = source;
+            SearchWindow.Open(new SearchWindowContext(screenPosition), _searchProvider);
+        }
+
+        /// <summary>
+        /// Copy/duplicate serialize through the sidecar format, so a selection can be pasted as
+        /// text elsewhere — and any valid graph JSON (hand-written or generated) can be pasted in.
+        /// </summary>
+        private string OnSerializeElements(IEnumerable<GraphElement> elements)
+        {
+            List<Node> nodes = elements.OfType<SaintsNodeView>().Select(view => view.target).ToList();
+            return nodes.Count == 0 ? string.Empty : GraphJson.Export(graph, nodes);
+        }
+
+        private bool OnCanPaste(string data)
+        {
+            return !string.IsNullOrWhiteSpace(data)
+                   && data.TrimStart().StartsWith("{", StringComparison.Ordinal)
+                   && data.Contains("\"nodes\"");
+        }
+
+        private void OnPaste(string operationName, string data)
+        {
+            List<Node> created;
+            try
+            {
+                created = GraphJson.Paste(graph, data, new Vector2(40f, 40f));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("SaintsGraph: could not paste graph JSON — " + exception.Message);
+                return;
+            }
+
+            if (created.Count == 0)
+            {
+                return;
+            }
+
+            SyncFromModel();
+            ClearSelection();
+            foreach (Node node in created)
+            {
+                if (_nodeViews.TryGetValue(node, out SaintsNodeView view))
+                {
+                    AddToSelection(view);
+                }
+            }
         }
     }
 }

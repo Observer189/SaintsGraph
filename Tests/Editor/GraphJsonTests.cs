@@ -94,5 +94,32 @@ namespace SaintsGraph.Tests
 
             Assert.AreEqual("Sum", _add.name);
         }
+
+        [Test]
+        public void Paste_AddsIndependentCopiesKeepingInternalEdges()
+        {
+            string clipboard = GraphJson.Export(_graph, new Node[] { _float, _add });
+
+            System.Collections.Generic.List<Node> created =
+                GraphJson.Paste(_graph, clipboard, new Vector2(50f, 50f));
+
+            Assert.AreEqual(2, created.Count, "two nodes pasted");
+            Assert.AreEqual(4, _graph.nodes.Count, "originals kept, copies added");
+            Assert.AreEqual(2, _graph.Edges.Count, "the internal edge came along");
+
+            foreach (Node node in created)
+            {
+                Assert.AreNotEqual("Float", node.name);
+                Assert.AreNotEqual("Add", node.name);
+            }
+
+            Node pastedFloat = created.Find(node => node is FloatNode);
+            Node pastedAdd = created.Find(node => node is AddNode);
+            Assert.AreEqual(2f, ((FloatNode)pastedFloat).value, "field values copied");
+            Assert.IsTrue(pastedFloat.GetOutputPort("value").IsConnectedTo(pastedAdd.GetInputPort("a")),
+                "pasted edge connects the copies, not the originals");
+            Assert.IsTrue(_float.GetOutputPort("value").IsConnectedTo(_add.GetInputPort("a")),
+                "original edge untouched");
+        }
     }
 }

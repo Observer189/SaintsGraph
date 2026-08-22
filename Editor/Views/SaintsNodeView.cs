@@ -563,6 +563,15 @@ namespace SaintsGraph.Editor
             view.portName = "";
             view.userData = port;
             view.portColor = _graphView.graphEditor.GetPortColor(port);
+
+            // Swap in our listener so dropping a connection on empty canvas offers a node to create.
+            if (view.edgeConnector != null)
+            {
+                view.RemoveManipulator(view.edgeConnector);
+            }
+
+            view.AddManipulator(new EdgeConnector<Edge>(_graphView.edgeConnectorListener));
+
             portViews[port.fieldName] = view;
             return view;
         }

@@ -50,30 +50,37 @@ namespace SaintsGraph.Editor
 
         public static string Export(NodeGraph graph)
         {
-            Dictionary<Node, string> ids = BuildIds(graph);
+            return Export(graph, graph.nodes);
+        }
+
+        /// <summary>
+        /// Exports a subset of a graph: the given nodes plus the edges whose both endpoints are
+        /// among them. Used for copy/paste, which shares the sidecar format — so a copied
+        /// selection can be pasted as text, and text can be pasted as a selection.
+        /// </summary>
+        public static string Export(NodeGraph graph, IEnumerable<Node> nodes)
+        {
+            List<Node> subset = nodes.Where(node => node != null).ToList();
+            Dictionary<Node, string> ids = BuildIds(subset);
             JsonObject root = new JsonObject
             {
                 ["format"] = new JsonString(FormatVersion),
                 ["graphType"] = new JsonString(TypeString(graph.GetType()))
             };
 
-            JsonArray nodes = new JsonArray();
-            foreach (Node node in graph.nodes)
+            JsonArray jsonNodes = new JsonArray();
+            foreach (Node node in subset)
             {
-                if (node == null)
-                {
-                    continue;
-                }
-
-                nodes.Items.Add(ExportNode(node, ids[node]));
+                jsonNodes.Items.Add(ExportNode(node, ids[node]));
             }
 
-            root["nodes"] = nodes;
+            root["nodes"] = jsonNodes;
 
             JsonArray edges = new JsonArray();
             foreach (NodeEdge edge in graph.Edges)
             {
-                if (edge.outputNode == null || edge.inputNode == null)
+                if (edge.outputNode == null || edge.inputNode == null
+                    || !ids.ContainsKey(edge.outputNode) || !ids.ContainsKey(edge.inputNode))
                 {
                     continue;
                 }
@@ -229,6 +236,99 @@ namespace SaintsGraph.Editor
             AssetDatabase.SaveAssets();
         }
 
+        /// <summary>
+        /// Adds the nodes and internal edges described by <paramref name="json"/> to an existing
+        /// graph, without touching what is already there. Node names are made unique, so pasting
+        /// the same clipboard twice yields two independent copies. Returns the created nodes.
+        /// </summary>
+        public static List<Node> Paste(NodeGraph graph, string json, Vector2 offset)
+        {
+            if (!(JsonValue.Parse(json) is JsonObject root) || !(root["nodes"] is JsonArray jsonNodes))
+            {
+                throw new FormatException("Clipboard JSON has no \"nodes\" array");
+            }
+
+            Undo.RegisterCompleteObjectUndo(graph, "Paste Nodes");
+            string assetPath = AssetDatabase.GetAssetPath(graph);
+            HashSet<string> usedNames = new HashSet<string>(
+                graph.nodes.Where(node => node != null).Select(node => node.name));
+
+            Dictionary<string, Node> byId = new Dictionary<string, Node>();
+            List<Node> created = new List<Node>();
+
+            foreach (JsonValue value in jsonNodes.Items)
+            {
+                if (!(value is JsonObject jsonNode))
+                {
+                    continue;
+                }
+
+                Type nodeType = ResolveType(jsonNode.GetString("type"));
+                if (nodeType == null || !typeof(Node).IsAssignableFrom(nodeType))
+                {
+                    Debug.LogWarning("Cannot paste node of unknown type '" + jsonNode.GetString("type") + "'");
+                    continue;
+                }
+
+                Node node = graph.AddNode(nodeType);
+                Undo.RegisterCreatedObjectUndo(node, "Paste Nodes");
+                ApplyNode(jsonNode, node);
+                node.name = UniqueName(node.name, nodeType, usedNames);
+                node.position += offset;
+
+                if (!string.IsNullOrEmpty(assetPath))
+                {
+                    AssetDatabase.AddObjectToAsset(node, graph);
+                }
+
+                string id = jsonNode.GetString("id");
+                if (!string.IsNullOrEmpty(id))
+                {
+                    byId[id] = node;
+                }
+
+                created.Add(node);
+                EditorUtility.SetDirty(node);
+            }
+
+            if (root["edges"] is JsonArray jsonEdges)
+            {
+                foreach (JsonValue value in jsonEdges.Items)
+                {
+                    if (!(value is JsonArray entry) || entry.Items.Count != 4)
+                    {
+                        continue;
+                    }
+
+                    NodePort output = ResolvePort(byId, entry.Items[0], entry.Items[1], NodePort.IO.Output);
+                    NodePort input = ResolvePort(byId, entry.Items[2], entry.Items[3], NodePort.IO.Input);
+                    if (output != null && input != null && !output.IsConnectedTo(input))
+                    {
+                        output.Connect(input);
+                    }
+                }
+            }
+
+            EditorUtility.SetDirty(graph);
+            return created;
+        }
+
+        private static string UniqueName(string preferred, Type nodeType, HashSet<string> used)
+        {
+            string baseName = string.IsNullOrEmpty(preferred)
+                ? NodeEditorUtilities.NodeDefaultName(nodeType)
+                : preferred;
+            string candidate = baseName;
+            int suffix = 2;
+            while (!used.Add(candidate))
+            {
+                candidate = baseName + " " + suffix;
+                suffix++;
+            }
+
+            return candidate;
+        }
+
         private static void ApplyNode(JsonObject jsonNode, Node node)
         {
             JsonObject payload = UnwrapPayload(node, out string wrapperKey);
@@ -374,9 +474,14 @@ namespace SaintsGraph.Editor
         /// <summary>Stable, human-readable node ids: node names, uniquified with #2, #3... in graph order.</summary>
         public static Dictionary<Node, string> BuildIds(NodeGraph graph)
         {
+            return BuildIds(graph.nodes);
+        }
+
+        public static Dictionary<Node, string> BuildIds(IEnumerable<Node> nodes)
+        {
             Dictionary<Node, string> result = new Dictionary<Node, string>();
             HashSet<string> taken = new HashSet<string>();
-            foreach (Node node in graph.nodes)
+            foreach (Node node in nodes)
             {
                 if (node == null)
                 {
