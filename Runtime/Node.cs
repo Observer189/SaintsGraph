@@ -150,9 +150,9 @@ namespace SaintsGraph
         public Vector2 position;
 
         /// <summary>Editor state kept with the node, like <see cref="position"/>: whether its body is folded away.</summary>
-        public bool collapsed;
+        [HideInInspector] public bool collapsed;
 
-        [SerializeField] private string uid;
+        [HideInInspector, SerializeField] private string uid;
 
         /// <summary>
         /// Identity that survives renames and reordering. The JSON sidecar matches nodes by this,

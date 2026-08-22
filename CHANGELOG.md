@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Nodes can be renamed by double-clicking their title, and the title tooltip names the node's
+  type — the title itself is the node's own name, which need not match its class.
+
 - Groups and sticky notes: right-click the canvas to create either. A group made with nodes
   selected adopts them, dragging nodes in and out updates membership, and both are stored in the
   graph asset and in the JSON sidecar (groups by node id, notes with text, size and theme), so
@@ -140,6 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Ctrl+S).
 
 ### Fixed
+
+- Node bodies showed `uid` as an editable text field and `collapsed` as a checkbox. Both are
+  bookkeeping rather than content: they are now hidden from inspectors and skipped by the body
+  builders. Editing a uid by hand could have broken the identity the sidecar matches on.
 
 - Sticky note text could not be edited. GraphView's own StickyNote starts contents editing by
   showing its text field and hiding the contents label — but in this Unity version that field is

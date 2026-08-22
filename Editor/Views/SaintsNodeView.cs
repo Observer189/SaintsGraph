@@ -67,11 +67,7 @@ namespace SaintsGraph.Editor
             editor.OnCreate();
 
             title = string.IsNullOrEmpty(target.name) ? target.GetType().Name : target.name;
-            string headerTooltip = editor.GetHeaderTooltip();
-            if (!string.IsNullOrEmpty(headerTooltip))
-            {
-                titleContainer.tooltip = headerTooltip;
-            }
+            titleContainer.tooltip = editor.GetHeaderTooltip() ?? target.GetType().Name;
 
             titleContainer.style.backgroundColor = editor.GetTint();
             style.minWidth = editor.GetWidth();
@@ -88,6 +84,7 @@ namespace SaintsGraph.Editor
                 titleContainer.Insert(0, customHeader);
             }
 
+            SetUpRenaming();
             CreatePortPills();
             if (!graphView.GetExpandedState(target))
             {
@@ -97,6 +94,58 @@ namespace SaintsGraph.Editor
             UpdatePortPlacement();
             SetPosition(new Rect(target.position, Vector2.zero));
             RefreshExpandedState();
+        }
+
+        /// <summary>Double-clicking the title renames the node, the way one renames a file.</summary>
+        private void SetUpRenaming()
+        {
+            Label titleLabel = titleContainer.Q<Label>("title-label");
+            if (titleLabel == null)
+            {
+                return;
+            }
+
+            TextField field = new TextField { isDelayed = true, style = { display = DisplayStyle.None } };
+            field.RegisterValueChangedCallback(evt => CommitRename(titleLabel, field, evt.newValue));
+            field.RegisterCallback<FocusOutEvent>(_ => CommitRename(titleLabel, field, field.value));
+            titleContainer.Insert(titleContainer.IndexOf(titleLabel) + 1, field);
+
+            titleLabel.RegisterCallback<MouseDownEvent>(evt =>
+            {
+                if (evt.button != 0 || evt.clickCount != 2)
+                {
+                    return;
+                }
+
+                evt.StopImmediatePropagation();
+                field.SetValueWithoutNotify(target.name);
+                field.style.display = DisplayStyle.Flex;
+                titleLabel.style.display = DisplayStyle.None;
+                field.Q(TextField.textInputUssName)?.Focus();
+                field.SelectAll();
+            });
+        }
+
+        private void CommitRename(Label titleLabel, TextField field, string newName)
+        {
+            if (field.style.display != DisplayStyle.Flex)
+            {
+                return;
+            }
+
+            field.style.display = DisplayStyle.None;
+            titleLabel.style.display = DisplayStyle.Flex;
+
+            newName = (newName ?? "").Trim();
+            if (newName.Length == 0 || newName == target.name)
+            {
+                return;
+            }
+
+            Undo.RecordObject(target, "Rename Node");
+            target.name = newName;
+            title = newName;
+            EditorUtility.SetDirty(target);
         }
 
         public void SetCycleWarning(bool inCycle)
@@ -164,7 +213,10 @@ namespace SaintsGraph.Editor
             // hidden backing values are toggled to a label in place — otherwise a connected port's
             // row would jump to the end of the body. Backing fields of dynamic port lists ARE
             // skipped: they render as custom list blocks with one port per element.
-            List<string> skipFields = new List<string> { "m_Script", "graph", "position", "dynamicPorts" };
+            List<string> skipFields = new List<string>
+            {
+                "m_Script", "graph", "position", "dynamicPorts", "uid", "collapsed"
+            };
             _listTemplates = new List<PortCache.PortTemplate>();
             foreach (PortCache.PortTemplate template in PortCache.GetTemplates(target.GetType()))
             {
