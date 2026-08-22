@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
@@ -38,7 +39,8 @@ namespace SaintsGraph.Editor
         internal readonly PortDropListener edgeConnectorListener;
         private readonly Dictionary<Node, SaintsNodeView> _nodeViews = new Dictionary<Node, SaintsNodeView>();
         private readonly Dictionary<NodeEdge, Edge> _edgeViews = new Dictionary<NodeEdge, Edge>();
-        private readonly Dictionary<Node, bool> _expandedStates = new Dictionary<Node, bool>();
+        private readonly Dictionary<NodeGroup, Group> _groupViews = new Dictionary<NodeGroup, Group>();
+        private readonly Dictionary<NodeNote, StickyNote> _noteViews = new Dictionary<NodeNote, StickyNote>();
         private bool _suspendChangeHandling;
         private bool _reloadScheduled;
         private bool _bodyBuildScheduled;
@@ -82,9 +84,21 @@ namespace SaintsGraph.Editor
             nodeCreationRequest = context =>
                 SearchWindow.Open(new SearchWindowContext(context.screenMousePosition), _searchProvider);
 
+            elementsAddedToGroup = OnElementsAddedToGroup;
+            elementsRemovedFromGroup = OnElementsRemovedFromGroup;
+            groupTitleChanged = OnGroupTitleChanged;
+            elementResized = element =>
+            {
+                if (element is StickyNote resizedNote && resizedNote.userData is NodeNote noteModel)
+                {
+                    SaveNote(resizedNote, noteModel);
+                }
+            };
+
             viewTransformChanged = _ =>
             {
                 _lastViewChange = EditorApplication.timeSinceStartup;
+                SaveViewTransform();
                 ScheduleBodyBuild();
             };
             RegisterCallback<GeometryChangedEvent>(_ => ScheduleBodyBuild());
@@ -95,17 +109,69 @@ namespace SaintsGraph.Editor
             });
 
             Reload();
+            // After layout, so the restored transform is not overwritten by the initial framing.
+            schedule.Execute(RestoreViewTransform).ExecuteLater(1);
         }
 
-        /// <summary>Collapse state per node, preserved across view reloads (session only).</summary>
+        /// <summary>
+        /// Pan and zoom are per-user preference rather than graph content, so they live in
+        /// EditorPrefs keyed by the asset's GUID instead of in the asset itself.
+        /// </summary>
+        private string ViewTransformKey
+        {
+            get
+            {
+                string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(graph));
+                return string.IsNullOrEmpty(guid) ? null : "SaintsGraph.ViewTransform." + guid;
+            }
+        }
+
+        private void SaveViewTransform()
+        {
+            string key = ViewTransformKey;
+            if (key != null)
+            {
+                Vector3 position = viewTransform.position;
+                EditorPrefs.SetString(key, string.Format(CultureInfo.InvariantCulture, "{0},{1},{2}",
+                    position.x, position.y, viewTransform.scale.x));
+            }
+        }
+
+        private void RestoreViewTransform()
+        {
+            string key = ViewTransformKey;
+            string stored = key == null ? null : EditorPrefs.GetString(key, null);
+            if (string.IsNullOrEmpty(stored))
+            {
+                return;
+            }
+
+            string[] parts = stored.Split(',');
+            if (parts.Length == 3
+                && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
+                && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float scale)
+                && scale > 0f)
+            {
+                UpdateViewTransform(new Vector3(x, y, 0f), new Vector3(scale, scale, 1f));
+            }
+        }
+
+        /// <summary>Collapse state lives on the node, so a folded node stays folded across sessions.</summary>
         internal bool GetExpandedState(Node node)
         {
-            return !_expandedStates.TryGetValue(node, out bool expanded) || expanded;
+            return node == null || !node.collapsed;
         }
 
         internal void SetExpandedState(Node node, bool expanded)
         {
-            _expandedStates[node] = expanded;
+            if (node == null || node.collapsed != expanded)
+            {
+                return;
+            }
+
+            node.collapsed = !expanded;
+            EditorUtility.SetDirty(node);
         }
 
         /// <summary>Releases per-node body resources. Call before discarding this view.</summary>
@@ -125,6 +191,8 @@ namespace SaintsGraph.Editor
             DeleteElements(graphElements.ToList());
             _nodeViews.Clear();
             _edgeViews.Clear();
+            _groupViews.Clear();
+            _noteViews.Clear();
             graph.PruneInvalidEdges();
 
             foreach (Node node in graph.nodes)
@@ -136,6 +204,7 @@ namespace SaintsGraph.Editor
             }
 
             SyncEdgeViews();
+            SyncAnnotationViews();
             RefreshCycleWarnings();
             _suspendChangeHandling = false;
             ScheduleBodyBuild();
@@ -207,6 +276,7 @@ namespace SaintsGraph.Editor
             }
 
             SyncEdgeViews();
+            SyncAnnotationViews();
 
             foreach (SaintsNodeView view in _nodeViews.Values)
             {
@@ -266,6 +336,180 @@ namespace SaintsGraph.Editor
             edge.input?.Disconnect(edge);
             RemoveElement(edge);
             _edgeViews.Remove(modelEdge);
+        }
+
+        private void SyncAnnotationViews()
+        {
+            foreach (KeyValuePair<NodeGroup, Group> entry in _groupViews.ToList())
+            {
+                if (!graph.Groups.Contains(entry.Key))
+                {
+                    RemoveElement(entry.Value);
+                    _groupViews.Remove(entry.Key);
+                }
+            }
+
+            foreach (NodeGroup group in graph.Groups)
+            {
+                if (!_groupViews.ContainsKey(group))
+                {
+                    CreateGroupView(group);
+                }
+            }
+
+            foreach (KeyValuePair<NodeNote, StickyNote> entry in _noteViews.ToList())
+            {
+                if (!graph.Notes.Contains(entry.Key))
+                {
+                    RemoveElement(entry.Value);
+                    _noteViews.Remove(entry.Key);
+                }
+            }
+
+            foreach (NodeNote note in graph.Notes)
+            {
+                if (!_noteViews.ContainsKey(note))
+                {
+                    CreateNoteView(note);
+                }
+            }
+        }
+
+        private void CreateGroupView(NodeGroup group)
+        {
+            Group view = new Group { title = group.title, userData = group };
+            AddElement(view);
+            _groupViews[group] = view;
+            view.SetPosition(new Rect(group.position, Vector2.zero));
+
+            foreach (Node node in group.nodes)
+            {
+                if (node != null && _nodeViews.TryGetValue(node, out SaintsNodeView nodeView))
+                {
+                    view.AddElement(nodeView);
+                }
+            }
+        }
+
+        private void CreateNoteView(NodeNote note)
+        {
+            StickyNote view = new StickyNote(note.area.position)
+            {
+                title = note.title,
+                contents = note.text,
+                theme = (StickyNoteTheme)note.theme,
+                fontSize = (StickyNoteFontSize)note.fontSize,
+                userData = note
+            };
+            view.SetPosition(note.area);
+            view.RegisterCallback<StickyNoteChangeEvent>(_ => SaveNote(view, note));
+            AddElement(view);
+            _noteViews[note] = view;
+        }
+
+        private void SaveNote(StickyNote view, NodeNote note)
+        {
+            Undo.RecordObject(graph, "Edit Note");
+            note.title = view.title;
+            note.text = view.contents;
+            note.theme = (int)view.theme;
+            note.fontSize = (int)view.fontSize;
+            note.area = view.GetPosition();
+            EditorUtility.SetDirty(graph);
+        }
+
+        public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
+        {
+            base.BuildContextualMenu(evt);
+
+            if (evt.target != this && evt.target != contentViewContainer)
+            {
+                return;
+            }
+
+            Vector2 where = contentViewContainer.WorldToLocal(evt.mousePosition);
+            evt.menu.AppendSeparator();
+            evt.menu.AppendAction("Create Group", _ => CreateGroup(where));
+            evt.menu.AppendAction("Create Sticky Note", _ => CreateNote(where));
+        }
+
+        /// <summary>A group created with nodes selected adopts them, which is what one means by grouping.</summary>
+        private void CreateGroup(Vector2 where)
+        {
+            Undo.RecordObject(graph, "Create Group");
+            NodeGroup group = new NodeGroup { position = where };
+            foreach (ISelectable selected in selection)
+            {
+                if (selected is SaintsNodeView nodeView)
+                {
+                    group.nodes.Add(nodeView.target);
+                }
+            }
+
+            graph.Groups.Add(group);
+            EditorUtility.SetDirty(graph);
+            SyncAnnotationViews();
+        }
+
+        private void CreateNote(Vector2 where)
+        {
+            Undo.RecordObject(graph, "Create Sticky Note");
+            NodeNote note = new NodeNote
+            {
+                title = "Note",
+                area = new Rect(where, StickyNote.defaultSize)
+            };
+            graph.Notes.Add(note);
+            EditorUtility.SetDirty(graph);
+            SyncAnnotationViews();
+        }
+
+        private void OnElementsAddedToGroup(Group groupView, IEnumerable<GraphElement> elements)
+        {
+            if (_suspendChangeHandling || !(groupView.userData is NodeGroup group))
+            {
+                return;
+            }
+
+            Undo.RecordObject(graph, "Group Nodes");
+            foreach (GraphElement element in elements)
+            {
+                if (element is SaintsNodeView nodeView && !group.nodes.Contains(nodeView.target))
+                {
+                    group.nodes.Add(nodeView.target);
+                }
+            }
+
+            EditorUtility.SetDirty(graph);
+        }
+
+        private void OnElementsRemovedFromGroup(Group groupView, IEnumerable<GraphElement> elements)
+        {
+            if (_suspendChangeHandling || !(groupView.userData is NodeGroup group))
+            {
+                return;
+            }
+
+            Undo.RecordObject(graph, "Ungroup Nodes");
+            foreach (GraphElement element in elements)
+            {
+                if (element is SaintsNodeView nodeView)
+                {
+                    group.nodes.Remove(nodeView.target);
+                }
+            }
+
+            EditorUtility.SetDirty(graph);
+        }
+
+        private void OnGroupTitleChanged(Group groupView, string title)
+        {
+            if (groupView.userData is NodeGroup group)
+            {
+                Undo.RecordObject(graph, "Rename Group");
+                group.title = title;
+                EditorUtility.SetDirty(graph);
+            }
         }
 
         private void RefreshCycleWarnings()
@@ -431,11 +675,21 @@ namespace SaintsGraph.Editor
             {
                 foreach (GraphElement element in change.movedElements)
                 {
-                    if (element is SaintsNodeView view)
+                    switch (element)
                     {
-                        Undo.RecordObject(view.target, "Move Node");
-                        view.target.position = view.GetPosition().position;
-                        EditorUtility.SetDirty(view.target);
+                        case SaintsNodeView view:
+                            Undo.RecordObject(view.target, "Move Node");
+                            view.target.position = view.GetPosition().position;
+                            EditorUtility.SetDirty(view.target);
+                            break;
+                        case StickyNote movedNote when movedNote.userData is NodeNote noteModel:
+                            SaveNote(movedNote, noteModel);
+                            break;
+                        case Group movedGroup when movedGroup.userData is NodeGroup groupModel:
+                            Undo.RecordObject(graph, "Move Group");
+                            groupModel.position = movedGroup.GetPosition().position;
+                            EditorUtility.SetDirty(graph);
+                            break;
                     }
                 }
             }
@@ -457,6 +711,24 @@ namespace SaintsGraph.Editor
 
                         EditorUtility.SetDirty(output.node);
                         EditorUtility.SetDirty(input.node);
+                        structuralChange = true;
+                    }
+                }
+
+                foreach (GraphElement element in change.elementsToRemove)
+                {
+                    if (element is Group removedGroup && removedGroup.userData is NodeGroup groupModel)
+                    {
+                        Undo.RecordObject(graph, "Delete Group");
+                        graph.Groups.Remove(groupModel);
+                        _groupViews.Remove(groupModel);
+                        structuralChange = true;
+                    }
+                    else if (element is StickyNote removedNote && removedNote.userData is NodeNote noteModel)
+                    {
+                        Undo.RecordObject(graph, "Delete Note");
+                        graph.Notes.Remove(noteModel);
+                        _noteViews.Remove(noteModel);
                         structuralChange = true;
                     }
                 }

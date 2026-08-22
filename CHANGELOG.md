@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Groups and sticky notes: right-click the canvas to create either. A group made with nodes
+  selected adopts them, dragging nodes in and out updates membership, and both are stored in the
+  graph asset and in the JSON sidecar (groups by node id, notes with text, size and theme), so
+  documentation travels with the graph.
+- Node collapse state is stored on the node, so folded nodes stay folded after reopening the
+  graph, and pan/zoom is restored per graph asset (kept in EditorPrefs, since it is a per-user
+  view preference rather than graph content).
+
 - Node schema export (`Tools → SaintsGraph → Copy Node Schema to Clipboard` /
   `Export Node Schema...`): a machine-readable description of every node type — ports with
   direction, element type and connection rules, default field values, menu path, instance

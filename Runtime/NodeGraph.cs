@@ -45,9 +45,17 @@ namespace SaintsGraph
         public List<Node> nodes = new List<Node>();
 
         [SerializeField] private List<NodeEdge> edges = new List<NodeEdge>();
+        [SerializeField] private List<NodeGroup> groups = new List<NodeGroup>();
+        [SerializeField] private List<NodeNote> notes = new List<NodeNote>();
 
         /// <summary>All connections of this graph. Single source of truth.</summary>
         public IReadOnlyList<NodeEdge> Edges => edges;
+
+        /// <summary>Frames around sets of nodes. Editor-facing, but part of the graph's content.</summary>
+        public List<NodeGroup> Groups => groups;
+
+        /// <summary>Free-floating notes on the canvas.</summary>
+        public List<NodeNote> Notes => notes;
 
         public T AddNode<T>() where T : Node
         {
@@ -81,6 +89,11 @@ namespace SaintsGraph
         {
             node.ClearConnections();
             RemoveEdges(node);
+            foreach (NodeGroup group in groups)
+            {
+                group.nodes.Remove(node);
+            }
+
             nodes.Remove(node);
             if (Application.isPlaying)
             {
@@ -103,6 +116,8 @@ namespace SaintsGraph
 
             nodes.Clear();
             edges.Clear();
+            groups.Clear();
+            notes.Clear();
         }
 
         /// <summary>Creates a deep runtime copy of this graph: nodes are cloned and edges remapped onto the clones.</summary>

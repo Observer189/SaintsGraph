@@ -36,7 +36,7 @@ namespace SaintsGraph.Editor
         {
             "m_Enabled", "m_EditorHideFlags", "m_ObjectHideFlags", "m_Name", "m_EditorClassIdentifier",
             "m_Script", "m_CorrespondingSourceObject", "m_PrefabInstance", "m_PrefabAsset", "m_GameObject",
-            "graph", "position", "dynamicPorts", "uid"
+            "graph", "position", "dynamicPorts", "uid", "collapsed"
         };
 
         public static string SidecarPathFor(NodeGraph graph)
@@ -96,6 +96,69 @@ namespace SaintsGraph.Editor
             }
 
             root["edges"] = edges;
+
+            JsonArray groups = new JsonArray();
+            foreach (NodeGroup group in graph.Groups)
+            {
+                JsonArray members = new JsonArray();
+                foreach (Node member in group.nodes)
+                {
+                    if (member != null && ids.TryGetValue(member, out string memberId))
+                    {
+                        members.Items.Add(new JsonString(memberId));
+                    }
+                }
+
+                JsonArray groupPosition = new JsonArray();
+                groupPosition.Items.Add(JsonNumber.From(Math.Round(group.position.x, 2)));
+                groupPosition.Items.Add(JsonNumber.From(Math.Round(group.position.y, 2)));
+
+                groups.Items.Add(new JsonObject
+                {
+                    ["title"] = new JsonString(group.title ?? ""),
+                    ["position"] = groupPosition,
+                    ["nodes"] = members
+                });
+            }
+
+            if (groups.Items.Count > 0)
+            {
+                root["groups"] = groups;
+            }
+
+            JsonArray notes = new JsonArray();
+            foreach (NodeNote note in graph.Notes)
+            {
+                JsonArray area = new JsonArray();
+                area.Items.Add(JsonNumber.From(Math.Round(note.area.x, 2)));
+                area.Items.Add(JsonNumber.From(Math.Round(note.area.y, 2)));
+                area.Items.Add(JsonNumber.From(Math.Round(note.area.width, 2)));
+                area.Items.Add(JsonNumber.From(Math.Round(note.area.height, 2)));
+
+                JsonObject entry = new JsonObject
+                {
+                    ["title"] = new JsonString(note.title ?? ""),
+                    ["text"] = new JsonString(note.text ?? ""),
+                    ["area"] = area
+                };
+
+                if (note.theme != 0)
+                {
+                    entry["theme"] = JsonNumber.From(note.theme);
+                }
+
+                if (note.fontSize != 0)
+                {
+                    entry["fontSize"] = JsonNumber.From(note.fontSize);
+                }
+
+                notes.Items.Add(entry);
+            }
+
+            if (notes.Items.Count > 0)
+            {
+                root["notes"] = notes;
+            }
             return root.Write() + "\n";
         }
 
@@ -129,6 +192,11 @@ namespace SaintsGraph.Editor
             position.Items.Add(JsonNumber.From(Math.Round(node.position.x, 2)));
             position.Items.Add(JsonNumber.From(Math.Round(node.position.y, 2)));
             result["position"] = position;
+
+            if (node.collapsed)
+            {
+                result["collapsed"] = new JsonBool(true);
+            }
 
             JsonObject payload = UnwrapPayload(node, out string _);
             JsonValue dynamicPorts = payload["dynamicPorts"];
@@ -247,6 +315,7 @@ namespace SaintsGraph.Editor
             }
 
             ApplyEdges(graph, root["edges"] as JsonArray, byId);
+            ApplyAnnotations(graph, root, byId);
 
             graph.PruneInvalidEdges();
             EditorUtility.SetDirty(graph);
@@ -439,6 +508,8 @@ namespace SaintsGraph.Editor
                 node.position = new Vector2(x.AsFloat, y.AsFloat);
             }
 
+            node.collapsed = jsonNode["collapsed"] is JsonBool collapsed && collapsed.Value;
+
             string name = jsonNode.GetString("name");
             if (!string.IsNullOrEmpty(name) && node.name != name)
             {
@@ -505,6 +576,79 @@ namespace SaintsGraph.Editor
                 if (!output.IsConnectedTo(input))
                 {
                     output.Connect(input);
+                }
+            }
+        }
+
+        /// <summary>Groups and notes are rebuilt wholesale — they are annotation, with no identity to preserve.</summary>
+        private static void ApplyAnnotations(NodeGraph graph, JsonObject root, Dictionary<string, Node> byId)
+        {
+            graph.Groups.Clear();
+            if (root["groups"] is JsonArray groups)
+            {
+                foreach (JsonValue value in groups.Items)
+                {
+                    if (!(value is JsonObject jsonGroup))
+                    {
+                        continue;
+                    }
+
+                    NodeGroup group = new NodeGroup { title = jsonGroup.GetString("title") ?? "Group" };
+                    if (jsonGroup["position"] is JsonArray position && position.Items.Count == 2
+                        && position.Items[0] is JsonNumber x && position.Items[1] is JsonNumber y)
+                    {
+                        group.position = new Vector2(x.AsFloat, y.AsFloat);
+                    }
+
+                    if (jsonGroup["nodes"] is JsonArray members)
+                    {
+                        foreach (JsonValue member in members.Items)
+                        {
+                            if (member is JsonString id && byId.TryGetValue(id.Value, out Node node) && node != null)
+                            {
+                                group.nodes.Add(node);
+                            }
+                        }
+                    }
+
+                    graph.Groups.Add(group);
+                }
+            }
+
+            graph.Notes.Clear();
+            if (root["notes"] is JsonArray notes)
+            {
+                foreach (JsonValue value in notes.Items)
+                {
+                    if (!(value is JsonObject jsonNote))
+                    {
+                        continue;
+                    }
+
+                    NodeNote note = new NodeNote
+                    {
+                        title = jsonNote.GetString("title") ?? "",
+                        text = jsonNote.GetString("text") ?? ""
+                    };
+
+                    if (jsonNote["area"] is JsonArray area && area.Items.Count == 4)
+                    {
+                        note.area = new Rect(
+                            ((JsonNumber)area.Items[0]).AsFloat, ((JsonNumber)area.Items[1]).AsFloat,
+                            ((JsonNumber)area.Items[2]).AsFloat, ((JsonNumber)area.Items[3]).AsFloat);
+                    }
+
+                    if (jsonNote["theme"] is JsonNumber theme)
+                    {
+                        note.theme = (int)theme.AsDouble;
+                    }
+
+                    if (jsonNote["fontSize"] is JsonNumber fontSize)
+                    {
+                        note.fontSize = (int)fontSize.AsDouble;
+                    }
+
+                    graph.Notes.Add(note);
                 }
             }
         }

@@ -154,10 +154,10 @@ the file — updates it rather than replacing it, and its connections survive.
 - [x] JSON sidecar v1 (export/import commands, auto-export on save)
 - [x] Dynamic port lists, lazy node bodies, cycle highlighting
 - [x] xNode asset migration tool, sample, package validation CI
-- [ ] Noodle styles, reroute points, preferences window
 - [x] Copy/paste/duplicate (clipboard is the JSON format), drag-to-create, graph search
 - [x] Node schema export, stable node identity, auto-import of external edits
-- [ ] Groups and sticky notes, drag-reorder for port lists, persisted collapse state
+- [x] Groups and sticky notes, persisted collapse state and camera
+- [ ] Noodle styles, reroute points, preferences window, drag-reorder for port lists
 - [ ] OpenUPM release
 
 See [Docs~/DESIGN.md](Docs~/DESIGN.md) for the architecture.

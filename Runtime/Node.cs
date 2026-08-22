@@ -149,6 +149,9 @@ namespace SaintsGraph
         public NodeGraph graph;
         public Vector2 position;
 
+        /// <summary>Editor state kept with the node, like <see cref="position"/>: whether its body is folded away.</summary>
+        public bool collapsed;
+
         [SerializeField] private string uid;
 
         /// <summary>
