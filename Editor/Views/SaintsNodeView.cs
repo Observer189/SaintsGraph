@@ -18,7 +18,7 @@ namespace SaintsGraph.Editor
     /// Bodies are built lazily (see <see cref="EnsureBodyBuilt"/>), driven by the graph view:
     /// on a large graph only what is on screen pays for its body.
     /// </summary>
-    internal class SaintsNodeView : GraphViewNode
+    internal class SaintsNodeView : GraphViewNode, IResizable
     {
         public readonly Node target;
         public readonly SaintsNodeEditor editor;
@@ -71,11 +71,9 @@ namespace SaintsGraph.Editor
             titleContainer.tooltip = editor.GetHeaderTooltip() ?? target.GetType().Name;
 
             titleContainer.style.backgroundColor = editor.GetTint();
-
-            // Fixed width, as in xNode ([NodeWidth], default 208): with auto-width, any control
-            // that transiently wants more space while being clicked — aligned field labels,
-            // reference pickers, enum popups — makes the whole node jump horizontally.
-            style.width = editor.GetWidth();
+            style.minWidth = 80;
+            ApplyConfiguredWidth();
+            SetUpResizer();
 
             VisualElement customHeader = editor.CreateHeader();
             if (customHeader != null)
@@ -116,6 +114,125 @@ namespace SaintsGraph.Editor
             }
 
             base.SetPosition(newPos);
+        }
+
+        private IVisualElementScheduledItem _widthSettle;
+        private bool _widthFrozen;
+
+        private float ConfiguredWidth =>
+            target.nodeWidth > 0f ? target.nodeWidth : editor.GetWidth();
+
+        private void ApplyConfiguredWidth()
+        {
+            float configured = ConfiguredWidth;
+            if (configured > 0f)
+            {
+                style.width = configured;
+                _widthFrozen = true;
+            }
+        }
+
+        /// <summary>
+        /// Nodes size to their content by default, but a free-floating width would jump whenever a
+        /// control transiently asks for more space on click (aligned labels, pickers, popups). So
+        /// the width is measured while the bound content settles and then frozen at that value —
+        /// content-sized, yet immovable afterwards. A manual drag or [NodeWidth] wins over this.
+        /// </summary>
+        private void StartWidthSettle()
+        {
+            if (_widthFrozen || ConfiguredWidth > 0f)
+            {
+                return;
+            }
+
+            RegisterCallback<GeometryChangedEvent>(OnGeometryForSettle);
+            BumpSettle();
+        }
+
+        private void OnGeometryForSettle(GeometryChangedEvent evt)
+        {
+            BumpSettle();
+        }
+
+        private void BumpSettle()
+        {
+            _widthSettle?.Pause();
+            _widthSettle = schedule.Execute(FreezeMeasuredWidth);
+            _widthSettle.ExecuteLater(250);
+        }
+
+        private void FreezeMeasuredWidth()
+        {
+            UnregisterCallback<GeometryChangedEvent>(OnGeometryForSettle);
+            if (_widthFrozen || target.nodeWidth > 0f)
+            {
+                return;
+            }
+
+            float measured = resolvedStyle.width;
+            if (measured > 1f)
+            {
+                style.width = Mathf.Ceil(measured);
+                _widthFrozen = true;
+            }
+        }
+
+        /// <summary>Width is user-draggable from the right edge; height always follows content.</summary>
+        private void SetUpResizer()
+        {
+            capabilities |= Capabilities.Resizable;
+            ResizableElement resizer = new ResizableElement();
+            foreach (string handle in new[]
+                     {
+                         "top-left-resize", "left-resize", "bottom-left-resize",
+                         "top-resize", "bottom-resize", "top-right-resize", "bottom-right-resize"
+                     })
+            {
+                VisualElement element = resizer.Q(handle);
+                if (element != null)
+                {
+                    element.style.display = DisplayStyle.None;
+                }
+            }
+
+            Add(resizer);
+        }
+
+        public void OnStartResize()
+        {
+            // The user takes over: stop any pending auto-freeze and make the change undoable.
+            _widthSettle?.Pause();
+            UnregisterCallback<GeometryChangedEvent>(OnGeometryForSettle);
+            _widthFrozen = true;
+            Undo.RecordObject(target, "Resize Node");
+        }
+
+        public void OnResized()
+        {
+            style.height = StyleKeyword.Auto;
+            float width = Mathf.Max(80f, resolvedStyle.width);
+            style.width = width;
+            target.nodeWidth = width;
+            EditorUtility.SetDirty(target);
+        }
+
+        public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
+        {
+            if (target.nodeWidth > 0f)
+            {
+                evt.menu.AppendAction("Reset Node Width", _ =>
+                {
+                    Undo.RecordObject(target, "Reset Node Width");
+                    target.nodeWidth = 0f;
+                    EditorUtility.SetDirty(target);
+                    _widthFrozen = false;
+                    style.width = StyleKeyword.Auto;
+                    StartWidthSettle();
+                });
+                evt.menu.AppendSeparator();
+            }
+
+            base.BuildContextualMenu(evt);
         }
 
         /// <summary>Double-clicking the title renames the node, the way one renames a file.</summary>
@@ -219,6 +336,7 @@ namespace SaintsGraph.Editor
             BuildBody();
             RefreshExpandedState();
             mainContainer.Bind(_serializedObject);
+            StartWidthSettle();
         }
 
         private void CreatePortPills()

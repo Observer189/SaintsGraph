@@ -36,7 +36,7 @@ namespace SaintsGraph.Editor
         {
             "m_Enabled", "m_EditorHideFlags", "m_ObjectHideFlags", "m_Name", "m_EditorClassIdentifier",
             "m_Script", "m_CorrespondingSourceObject", "m_PrefabInstance", "m_PrefabAsset", "m_GameObject",
-            "graph", "position", "dynamicPorts", "uid", "collapsed"
+            "graph", "position", "dynamicPorts", "uid", "collapsed", "nodeWidth"
         };
 
         public static string SidecarPathFor(NodeGraph graph)
@@ -196,6 +196,11 @@ namespace SaintsGraph.Editor
             if (node.collapsed)
             {
                 result["collapsed"] = new JsonBool(true);
+            }
+
+            if (node.nodeWidth > 0f)
+            {
+                result["width"] = JsonNumber.From(Math.Round(node.nodeWidth));
             }
 
             JsonObject payload = UnwrapPayload(node, out string _);
@@ -509,6 +514,7 @@ namespace SaintsGraph.Editor
             }
 
             node.collapsed = jsonNode["collapsed"] is JsonBool collapsed && collapsed.Value;
+            node.nodeWidth = jsonNode["width"] is JsonNumber width ? width.AsFloat : 0f;
 
             string name = jsonNode.GetString("name");
             if (!string.IsNullOrEmpty(name) && node.name != name)

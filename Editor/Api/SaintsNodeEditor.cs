@@ -50,10 +50,11 @@ namespace SaintsGraph.Editor
             return null;
         }
 
+        /// <summary>Fixed width for this node type, or 0 to size to content (the default).</summary>
         public virtual int GetWidth()
         {
             Node.NodeWidthAttribute attribute = target.GetType().GetCustomAttribute<Node.NodeWidthAttribute>();
-            return attribute?.width ?? 208;
+            return attribute?.width ?? 0;
         }
 
         public virtual Color GetTint()

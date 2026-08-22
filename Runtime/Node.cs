@@ -152,6 +152,9 @@ namespace SaintsGraph
         /// <summary>Editor state kept with the node, like <see cref="position"/>: whether its body is folded away.</summary>
         [HideInInspector] public bool collapsed;
 
+        /// <summary>Manually dragged node width, in graph units. Zero means "size to content".</summary>
+        [HideInInspector] public float nodeWidth;
+
         [HideInInspector, SerializeField] private string uid;
 
         /// <summary>

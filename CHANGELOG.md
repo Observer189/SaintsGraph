@@ -150,11 +150,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the toolbar Save button, on window close, after undo/redo, and with the project save
   (Ctrl+S).
 
-### Fixed
+### Added
 
-- Nodes are fixed-width again, as in xNode (`[NodeWidth]`, default 208). With auto-width,
-  clicking a reference picker or an enum popup that barely fits made the whole node briefly
-  widen — any control transiently asking for more space stretched the node and snapped back.
+- Manual node width: drag the right edge of a node to set its width (stored with the node and
+  in the sidecar as `"width"`), right-click → Reset Node Width to return to automatic sizing.
+
+### Changed
+
+- Nodes size to their content by default again, but the measured width is frozen once the
+  bound content settles — so clicking a reference picker or an enum popup no longer makes the
+  node briefly widen (any control transiently asking for more space used to stretch it).
+  `[NodeWidth]` still forces a fixed width; a manual drag overrides both.
+
+### Fixed
 - List controls (ListView-based array fields) inside node bodies no longer fight the node's
   own manipulators — the well-known "ListView is dysfunctional inside GraphView" problem:
   pressing a list item also selected and started dragging the node, the press was captured
