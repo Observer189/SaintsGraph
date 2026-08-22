@@ -152,6 +152,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- List controls (ListView-based array fields) inside node bodies no longer fight the node's
+  own manipulators — the well-known "ListView is dysfunctional inside GraphView" problem:
+  pressing a list item also selected and started dragging the node, the press was captured
+  away from the list, and item selection landed wrong. MouseDown events originating inside
+  list controls now stop at the body boundary, so lists own their input.
+
 - Node bodies showed `uid` as an editable text field and `collapsed` as a checkbox. Both are
   bookkeeping rather than content: they are now hidden from inspectors and skipped by the body
   builders. Editing a uid by hand could have broken the identity the sidecar matches on.

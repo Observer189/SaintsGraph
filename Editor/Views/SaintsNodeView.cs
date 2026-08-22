@@ -260,7 +260,42 @@ namespace SaintsGraph.Editor
 
             body.AddToClassList("saints-node-body");
             AttachPortPills(body);
+            IsolateListInteraction(body);
             extensionContainer.Add(body);
+        }
+
+        /// <summary>
+        /// List controls inside a node fight the node's own manipulators: pressing a list item
+        /// also selects the node and starts dragging it, the press is captured away from the
+        /// list, and selection lands wherever the node moved — the well-known "ListView is
+        /// dysfunctional inside GraphView" problem. Node selection and dragging listen for
+        /// bubbled MouseDown, so stopping it at the body boundary for events that originate
+        /// inside a list control lets the list handle its own input. Delegation (checking the
+        /// target's ancestors) is used because bound PropertyFields materialize their ListViews
+        /// asynchronously, so the controls cannot be enumerated up front.
+        /// </summary>
+        private void IsolateListInteraction(VisualElement body)
+        {
+            body.RegisterCallback<MouseDownEvent>(evt =>
+            {
+                if (evt.target is VisualElement target && IsInsideListControl(target, body))
+                {
+                    evt.StopPropagation();
+                }
+            });
+        }
+
+        private static bool IsInsideListControl(VisualElement target, VisualElement body)
+        {
+            for (VisualElement current = target; current != null && current != body; current = current.parent)
+            {
+                if (current is BaseVerticalCollectionView || current is ScrollView)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool ShowsBackingField(NodePort port)
