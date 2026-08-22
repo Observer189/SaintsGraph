@@ -402,6 +402,18 @@ namespace SaintsGraph.Editor
                 userData = note
             };
             view.SetPosition(note.area);
+
+            // An empty note's contents label collapses to zero height, so a double-click lands on
+            // the note frame and text editing never starts. Make it fill the body instead. Inline
+            // styles are used deliberately: a stylesheet rule would lose to the built-in one.
+            Label contents = view.Q<Label>("contents");
+            if (contents != null)
+            {
+                contents.style.flexGrow = 1;
+                contents.style.minHeight = 32;
+                contents.style.whiteSpace = WhiteSpace.Normal;
+            }
+
             view.RegisterCallback<StickyNoteChangeEvent>(_ => SaveNote(view, note));
             AddElement(view);
             _noteViews[note] = view;
