@@ -7,7 +7,10 @@ namespace SaintsGraph.Editor
     /// <summary>How connections are drawn between ports.</summary>
     public enum NoodleStyle
     {
-        /// <summary>Bezier curve leaving each port horizontally. The familiar node-graph look.</summary>
+        /// <summary>Horizontal stubs at both ports joined by a diagonal, corners rounded — GraphView's own look.</summary>
+        Rounded,
+
+        /// <summary>Bezier curve leaving each port horizontally.</summary>
         Curvy,
 
         /// <summary>Right-angle routing with softened corners.</summary>
@@ -24,45 +27,28 @@ namespace SaintsGraph.Editor
     public static class SaintsGraphPreferences
     {
         private const string StyleKey = "SaintsGraph.NoodleStyle";
-        private const string ThicknessKey = "SaintsGraph.NoodleThickness";
-        private const string SnapKey = "SaintsGraph.GridSnap";
+        private const string SnapKey = "SaintsGraph.SnapCells";
+
+        /// <summary>
+        /// Size of one grid cell, in graph units. The canvas draws its grid at this spacing
+        /// (see SaintsGraphView.uss), so snapping in whole cells lands nodes on the lines you see.
+        /// </summary>
+        public const float GridCell = 20f;
 
         /// <summary>Raised when a preference changes, so open graph windows can follow along.</summary>
         public static event Action Changed;
 
         public static NoodleStyle NoodleStyle
         {
-            get => (NoodleStyle)EditorPrefs.GetInt(StyleKey, (int)NoodleStyle.Curvy);
+            get => (NoodleStyle)EditorPrefs.GetInt(StyleKey, (int)NoodleStyle.Rounded);
             set => Set(StyleKey, (int)value, (int)NoodleStyle);
         }
 
-        public static float NoodleThickness
+        /// <summary>How many grid cells a dragged node snaps to. Zero means no snapping.</summary>
+        public static int SnapCells
         {
-            get => Mathf.Clamp(EditorPrefs.GetFloat(ThicknessKey, 2f), 1f, 10f);
-            set
-            {
-                float clamped = Mathf.Clamp(value, 1f, 10f);
-                if (!Mathf.Approximately(clamped, NoodleThickness))
-                {
-                    EditorPrefs.SetFloat(ThicknessKey, clamped);
-                    Changed?.Invoke();
-                }
-            }
-        }
-
-        /// <summary>Grid step nodes snap to while being dragged. Zero disables snapping.</summary>
-        public static float GridSnap
-        {
-            get => Mathf.Max(0f, EditorPrefs.GetFloat(SnapKey, 0f));
-            set
-            {
-                float clamped = Mathf.Max(0f, value);
-                if (!Mathf.Approximately(clamped, GridSnap))
-                {
-                    EditorPrefs.SetFloat(SnapKey, clamped);
-                    Changed?.Invoke();
-                }
-            }
+            get => Mathf.Clamp(EditorPrefs.GetInt(SnapKey, 0), 0, 8);
+            set => Set(SnapKey, Mathf.Clamp(value, 0, 8), SnapCells);
         }
 
         private static void Set(string key, int value, int current)
@@ -77,10 +63,14 @@ namespace SaintsGraph.Editor
         /// <summary>Applies the grid snap, if any, to a node position.</summary>
         public static Vector2 Snap(Vector2 position)
         {
-            float step = GridSnap;
-            return step <= 0f
-                ? position
-                : new Vector2(Mathf.Round(position.x / step) * step, Mathf.Round(position.y / step) * step);
+            int cells = SnapCells;
+            if (cells <= 0)
+            {
+                return position;
+            }
+
+            float step = GridCell * cells;
+            return new Vector2(Mathf.Round(position.x / step) * step, Mathf.Round(position.y / step) * step);
         }
 
         [SettingsProvider]
@@ -95,13 +85,13 @@ namespace SaintsGraph.Editor
                     EditorGUIUtility.labelWidth = 180f;
                     EditorGUILayout.LabelField("Connections", EditorStyles.boldLabel);
                     NoodleStyle = (NoodleStyle)EditorGUILayout.EnumPopup("Style", NoodleStyle);
-                    NoodleThickness = EditorGUILayout.Slider("Thickness", NoodleThickness, 1f, 10f);
 
                     EditorGUILayout.Space();
                     EditorGUILayout.LabelField("Canvas", EditorStyles.boldLabel);
-                    GridSnap = EditorGUILayout.Slider(
-                        new GUIContent("Grid snap", "Step nodes snap to when dragged. 0 disables snapping."),
-                        GridSnap, 0f, 100f);
+                    SnapCells = EditorGUILayout.IntSlider(
+                        new GUIContent("Snap to grid (cells)",
+                            "Dragged nodes snap to this many cells of the grid drawn on the canvas. 0 disables snapping."),
+                        SnapCells, 0, 8);
 
                     EditorGUILayout.Space();
                     EditorGUILayout.LabelField("JSON sidecar", EditorStyles.boldLabel);

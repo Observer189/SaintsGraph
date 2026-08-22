@@ -44,13 +44,11 @@ namespace SaintsGraph.Editor
         {
             // Replaces GraphView's own draw callback; its private render points are not reachable.
             generateVisualContent = Draw;
-            edgeWidth = Mathf.RoundToInt(SaintsGraphPreferences.NoodleThickness);
         }
 
         public void RefreshStyle()
         {
             _style = SaintsGraphPreferences.NoodleStyle;
-            edgeWidth = Mathf.RoundToInt(SaintsGraphPreferences.NoodleThickness);
             MarkDirtyRepaint();
         }
 
@@ -122,7 +120,7 @@ namespace SaintsGraph.Editor
             Painter2D painter = context.painter2D;
             painter.BeginPath();
             painter.strokeGradient = _gradient;
-            painter.lineWidth = edgeWidth;
+            painter.lineWidth = Mathf.Max(edgeWidth, 2f);
             painter.lineJoin = LineJoin.Round;
             painter.lineCap = LineCap.Round;
             painter.MoveTo(_points[0]);
@@ -139,6 +137,10 @@ namespace SaintsGraph.Editor
             _points.Clear();
             switch (_style)
             {
+                case NoodleStyle.Curvy:
+                    BuildCurvy(start, end);
+                    break;
+
                 case NoodleStyle.Straight:
                     _points.Add(start);
                     _points.Add(end);
@@ -149,9 +151,28 @@ namespace SaintsGraph.Editor
                     break;
 
                 default:
-                    BuildCurvy(start, end);
+                    BuildRounded(start, end);
                     break;
             }
+        }
+
+        /// <summary>
+        /// The shape GraphView draws by default: a short horizontal stub at each port, a diagonal
+        /// between them, and rounded corners where they meet. Reimplemented here because taking
+        /// over the drawing is the only way to offer any other style at all.
+        /// </summary>
+        private void BuildRounded(Vector2 start, Vector2 end)
+        {
+            float span = Mathf.Abs(end.x - start.x);
+            float stub = Mathf.Clamp(span * 0.25f, 12f, 28f);
+            Vector2 a = start + Vector2.right * stub;
+            Vector2 b = end - Vector2.right * stub;
+            float radius = Mathf.Min(16f, (a - b).magnitude * 0.4f);
+
+            _points.Add(start);
+            AddCorner(start, a, b, radius);
+            AddCorner(a, b, end, radius);
+            _points.Add(end);
         }
 
         private void BuildCurvy(Vector2 start, Vector2 end)

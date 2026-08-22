@@ -2,7 +2,8 @@ GridBackground {
     --grid-background-color: #1e1e1e;
     --line-color: rgba(200, 200, 200, 0.05);
     --thick-line-color: rgba(200, 200, 200, 0.09);
-    --spacing: 16;
+    /* Must match SaintsGraphPreferences.GridCell: snapping is measured in these cells. */
+    --spacing: 20;
 }
 
 .saints-node-body {

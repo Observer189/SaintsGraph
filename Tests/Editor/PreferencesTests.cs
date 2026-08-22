@@ -7,23 +7,20 @@ namespace SaintsGraph.Tests
     public class PreferencesTests
     {
         private NoodleStyle _style;
-        private float _thickness;
-        private float _snap;
+        private int _snapCells;
 
         [SetUp]
         public void SetUp()
         {
             _style = SaintsGraphPreferences.NoodleStyle;
-            _thickness = SaintsGraphPreferences.NoodleThickness;
-            _snap = SaintsGraphPreferences.GridSnap;
+            _snapCells = SaintsGraphPreferences.SnapCells;
         }
 
         [TearDown]
         public void TearDown()
         {
             SaintsGraphPreferences.NoodleStyle = _style;
-            SaintsGraphPreferences.NoodleThickness = _thickness;
-            SaintsGraphPreferences.GridSnap = _snap;
+            SaintsGraphPreferences.SnapCells = _snapCells;
         }
 
         [Test]
@@ -52,26 +49,23 @@ namespace SaintsGraph.Tests
         }
 
         [Test]
-        public void Thickness_Is_Clamped_To_A_Usable_Range()
+        public void Snap_Is_Measured_In_Cells_Of_The_Drawn_Grid()
         {
-            SaintsGraphPreferences.NoodleThickness = 100f;
-            Assert.AreEqual(10f, SaintsGraphPreferences.NoodleThickness);
-
-            SaintsGraphPreferences.NoodleThickness = -5f;
-            Assert.AreEqual(1f, SaintsGraphPreferences.NoodleThickness);
-        }
-
-        [Test]
-        public void Snap_Rounds_Positions_And_Is_Off_By_Default_Value_Zero()
-        {
-            SaintsGraphPreferences.GridSnap = 0f;
+            SaintsGraphPreferences.SnapCells = 0;
             Assert.AreEqual(new Vector2(13f, 27f), SaintsGraphPreferences.Snap(new Vector2(13f, 27f)),
                 "zero means no snapping at all");
 
-            SaintsGraphPreferences.GridSnap = 20f;
-            Assert.AreEqual(new Vector2(20f, 40f), SaintsGraphPreferences.Snap(new Vector2(23f, 34f)));
-            Assert.AreEqual(new Vector2(0f, -20f), SaintsGraphPreferences.Snap(new Vector2(-7f, -14f)),
+            SaintsGraphPreferences.SnapCells = 1;
+            float cell = SaintsGraphPreferences.GridCell;
+            Assert.AreEqual(new Vector2(cell, 2f * cell),
+                SaintsGraphPreferences.Snap(new Vector2(cell * 1.15f, cell * 1.7f)));
+            Assert.AreEqual(new Vector2(0f, -cell),
+                SaintsGraphPreferences.Snap(new Vector2(-cell * 0.35f, -cell * 0.7f)),
                 "snapping works either side of the origin");
+
+            SaintsGraphPreferences.SnapCells = 2;
+            Assert.AreEqual(new Vector2(2f * cell, 0f), SaintsGraphPreferences.Snap(new Vector2(cell * 1.6f, cell * 0.4f)),
+                "more cells means a coarser step");
         }
     }
 }

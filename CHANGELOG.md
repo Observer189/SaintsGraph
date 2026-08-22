@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Preferences (**Preferences → SaintsGraph**): connection style and thickness, grid snap for
-  dragged nodes, and the JSON sidecar auto-export/auto-import toggles in one place. Open graph
-  windows follow changes immediately.
-- Connection styles: **Curvy** (bezier, the default), **Angled** (right-angle routing with
-  softened corners) and **Straight**. SaintsGraph draws connections itself rather than using
-  GraphView's fixed routing, so hit-testing follows the drawn shape too.
-
+- Preferences (**Preferences → SaintsGraph**): connection style, grid snapping, and the JSON
+  sidecar auto-export/auto-import toggles in one place. Open graph windows follow changes
+  immediately.
+- Connection styles: **Rounded** (GraphView's own shape, still the default), **Curvy** (bezier),
+  **Angled** (right-angle routing) and **Straight**. SaintsGraph draws connections itself, since
+  Unity keeps its render points private, and hit-testing follows the drawn shape.
+- Grid snapping, measured in cells of the grid actually drawn on the canvas: nodes snap while
+  being dragged, not on drop, so they follow the lines you can see.
 - Nodes can be renamed by double-clicking their title, and the title tooltip names the node's
   type — the title itself is the node's own name, which need not match its class.
 

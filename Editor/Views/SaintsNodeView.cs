@@ -35,6 +35,7 @@ namespace SaintsGraph.Editor
         private List<PortCache.PortTemplate> _listTemplates = new List<PortCache.PortTemplate>();
         private Action _bodyTeardown;
         private bool _bodyBuilt;
+        private bool _dragging;
 
         public bool BodyBuilt => _bodyBuilt;
 
@@ -85,6 +86,13 @@ namespace SaintsGraph.Editor
             }
 
             SetUpRenaming();
+
+            // Snapping has to happen while the node is being dragged, not only when it is dropped,
+            // or the node would jump at the end instead of following the grid.
+            RegisterCallback<MouseDownEvent>(evt => _dragging = evt.button == 0);
+            RegisterCallback<MouseUpEvent>(_ => _dragging = false);
+            RegisterCallback<MouseCaptureOutEvent>(_ => _dragging = false);
+
             CreatePortPills();
             if (!graphView.GetExpandedState(target))
             {
@@ -94,6 +102,16 @@ namespace SaintsGraph.Editor
             UpdatePortPlacement();
             SetPosition(new Rect(target.position, Vector2.zero));
             RefreshExpandedState();
+        }
+
+        public override void SetPosition(Rect newPos)
+        {
+            if (_dragging)
+            {
+                newPos.position = SaintsGraphPreferences.Snap(newPos.position);
+            }
+
+            base.SetPosition(newPos);
         }
 
         /// <summary>Double-clicking the title renames the node, the way one renames a file.</summary>
