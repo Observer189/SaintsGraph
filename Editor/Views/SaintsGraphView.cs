@@ -108,6 +108,9 @@ namespace SaintsGraph.Editor
                 _hasMousePosition = true;
             });
 
+            SaintsGraphPreferences.Changed += OnPreferencesChanged;
+            RegisterCallback<DetachFromPanelEvent>(_ => SaintsGraphPreferences.Changed -= OnPreferencesChanged);
+
             Reload();
             // After layout, so the restored transform is not overwritten by the initial framing.
             schedule.Execute(RestoreViewTransform).ExecuteLater(1);
@@ -154,6 +157,14 @@ namespace SaintsGraph.Editor
                 && scale > 0f)
             {
                 UpdateViewTransform(new Vector3(x, y, 0f), new Vector3(scale, scale, 1f));
+            }
+        }
+
+        private void OnPreferencesChanged()
+        {
+            foreach (Edge edge in _edgeViews.Values)
+            {
+                (edge as SaintsEdge)?.RefreshStyle();
             }
         }
 
@@ -322,7 +333,7 @@ namespace SaintsGraph.Editor
                     continue;
                 }
 
-                Edge edge = new Edge { output = output, input = input };
+                SaintsEdge edge = new SaintsEdge { output = output, input = input };
                 output.Connect(edge);
                 input.Connect(edge);
                 AddElement(edge);
@@ -816,7 +827,9 @@ namespace SaintsGraph.Editor
                     {
                         case SaintsNodeView view:
                             Undo.RecordObject(view.target, "Move Node");
-                            view.target.position = view.GetPosition().position;
+                            Vector2 dropped = SaintsGraphPreferences.Snap(view.GetPosition().position);
+                            view.target.position = dropped;
+                            view.SetPosition(new Rect(dropped, Vector2.zero));
                             EditorUtility.SetDirty(view.target);
                             break;
                         case StickyNote movedNote when movedNote.userData is NodeNote noteModel:

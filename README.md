@@ -157,7 +157,8 @@ the file — updates it rather than replacing it, and its connections survive.
 - [x] Copy/paste/duplicate (clipboard is the JSON format), drag-to-create, graph search
 - [x] Node schema export, stable node identity, auto-import of external edits
 - [x] Groups and sticky notes, persisted collapse state and camera
-- [ ] Noodle styles, reroute points, preferences window, drag-reorder for port lists
+- [x] Connection styles, preferences window, grid snap
+- [ ] Reroute points, drag-reorder for port lists
 - [ ] OpenUPM release
 
 See [Docs~/DESIGN.md](Docs~/DESIGN.md) for the architecture.

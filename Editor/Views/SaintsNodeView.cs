@@ -608,7 +608,7 @@ namespace SaintsGraph.Editor
 
         private Port MakePortPill(NodePort port)
         {
-            Port view = Port.Create<Edge>(Orientation.Horizontal,
+            Port view = Port.Create<SaintsEdge>(Orientation.Horizontal,
                 port.IsInput ? Direction.Input : Direction.Output,
                 port.connectionType == Node.ConnectionType.Multiple ? Port.Capacity.Multi : Port.Capacity.Single,
                 port.ValueType ?? typeof(object));
@@ -622,7 +622,7 @@ namespace SaintsGraph.Editor
                 view.RemoveManipulator(view.edgeConnector);
             }
 
-            view.AddManipulator(new EdgeConnector<Edge>(_graphView.edgeConnectorListener));
+            view.AddManipulator(new EdgeConnector<SaintsEdge>(_graphView.edgeConnectorListener));
 
             portViews[port.fieldName] = view;
             return view;

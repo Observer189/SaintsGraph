@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Preferences (**Preferences → SaintsGraph**): connection style and thickness, grid snap for
+  dragged nodes, and the JSON sidecar auto-export/auto-import toggles in one place. Open graph
+  windows follow changes immediately.
+- Connection styles: **Curvy** (bezier, the default), **Angled** (right-angle routing with
+  softened corners) and **Straight**. SaintsGraph draws connections itself rather than using
+  GraphView's fixed routing, so hit-testing follows the drawn shape too.
+
 - Nodes can be renamed by double-clicking their title, and the title tooltip names the node's
   type — the title itself is the node's own name, which need not match its class.
 
