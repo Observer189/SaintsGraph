@@ -152,7 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title or contents *label*, and a label with no text has no size to be clicked — so an empty note
   is unreachable, and clearing a title makes even the title unreachable. SaintsGraph now handles
   the double-click on the note itself and decides by region: the top band edits the title, the
-  rest edits the contents. Escape or clicking away commits.
+  rest edits the contents, focus is claimed the way the built-in handler does it (the focus
+  controller must be told to ignore the click, or it hands focus straight back), and Escape
+  or clicking away commits.
 - Node bodies showed `uid` as an editable text field and `collapsed` as a checkbox. Both are
   bookkeeping rather than content: they are now hidden from inspectors and skipped by the body
   builders. Editing a uid by hand could have broken the identity the sidecar matches on.

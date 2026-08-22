@@ -455,7 +455,8 @@ namespace SaintsGraph.Editor
                 SaveNote(view, note);
             }
 
-            void BeginEdit(TextField field, string value, VisualElement hide, bool blankInsteadOfHiding)
+            void BeginEdit(TextField field, string value, VisualElement hide, bool blankInsteadOfHiding,
+                MouseDownEvent evt)
             {
                 Commit();
                 field.SetValueWithoutNotify(value ?? "");
@@ -470,8 +471,25 @@ namespace SaintsGraph.Editor
                     hide.style.display = DisplayStyle.None;
                 }
 
-                field.Q(TextField.textInputUssName)?.Focus();
+                VisualElement input = field.Q(TextField.textInputUssName);
+                input?.Focus();
                 field.SelectAll();
+
+                evt.StopPropagation();
+
+                // Without this the focus controller hands focus back to whatever the click landed
+                // on, and the field shows up but never receives a keystroke. The built-in handler
+                // guards against exactly this; missing it is what left the editor dead.
+                view.focusController?.IgnoreEvent(evt);
+
+                // And if focus still did not settle this frame, claim it on the next one.
+                view.schedule.Execute(() =>
+                {
+                    if (field.style.display == DisplayStyle.Flex)
+                    {
+                        input?.Focus();
+                    }
+                }).ExecuteLater(0);
             }
 
             view.RegisterCallback<MouseDownEvent>(evt =>
@@ -489,17 +507,15 @@ namespace SaintsGraph.Editor
                     return;
                 }
 
-                evt.StopImmediatePropagation();
-
                 // An empty title has no height of its own, so the band is a fixed minimum.
                 float titleBand = Mathf.Max(titleLabel.layout.height, 22f);
                 if (point.y <= titleBand)
                 {
-                    BeginEdit(titleField, note.title, titleLabel, false);
+                    BeginEdit(titleField, note.title, titleLabel, false, evt);
                 }
                 else
                 {
-                    BeginEdit(contentsField, note.text, contentsLabel, true);
+                    BeginEdit(contentsField, note.text, contentsLabel, true, evt);
                 }
             }, TrickleDown.TrickleDown);
 
