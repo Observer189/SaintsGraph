@@ -71,7 +71,11 @@ namespace SaintsGraph.Editor
             titleContainer.tooltip = editor.GetHeaderTooltip() ?? target.GetType().Name;
 
             titleContainer.style.backgroundColor = editor.GetTint();
-            style.minWidth = editor.GetWidth();
+
+            // Fixed width, as in xNode ([NodeWidth], default 208): with auto-width, any control
+            // that transiently wants more space while being clicked — aligned field labels,
+            // reference pickers, enum popups — makes the whole node jump horizontally.
+            style.width = editor.GetWidth();
 
             VisualElement customHeader = editor.CreateHeader();
             if (customHeader != null)

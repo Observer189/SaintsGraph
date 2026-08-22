@@ -152,6 +152,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Nodes are fixed-width again, as in xNode (`[NodeWidth]`, default 208). With auto-width,
+  clicking a reference picker or an enum popup that barely fits made the whole node briefly
+  widen — any control transiently asking for more space stretched the node and snapped back.
 - List controls (ListView-based array fields) inside node bodies no longer fight the node's
   own manipulators — the well-known "ListView is dysfunctional inside GraphView" problem:
   pressing a list item also selected and started dragging the node, the press was captured
