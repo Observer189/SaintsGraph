@@ -126,7 +126,10 @@ changes show up as readable diffs in version control.
 The sidecar format is also the clipboard format, which makes a round trip possible without any
 integration:
 
-1. **Tools → SaintsGraph → Copy Node Schema to Clipboard** — copies a machine-readable
+The schema and a graph are two different documents: the schema describes which node types
+*exist*, a graph document describes an actual graph. Only the latter can be pasted into a window.
+
+1. **Tools → SaintsGraph → Copy Node Schema for Tools or LLM** — copies a machine-readable
    description of every node type in the project: assembly-qualified type names, ports (direction,
    value type, connection rules), default field values, and short instructions on the document
    format itself.
@@ -134,9 +137,11 @@ integration:
 3. Paste the JSON it returns straight into an open graph window with **Ctrl+V** — the nodes appear
    under the cursor, wired up.
 
-For file-based workflows, write the JSON to `<Graph>.graph.json` next to the asset instead and use
-**Import Graph JSON**, or switch on **Tools → SaintsGraph → Auto Import Graph JSON** to have Unity
-apply external edits to that file as soon as it refreshes.
+For file-based workflows, write the JSON to `<Graph>.graph.json` next to the asset and use
+**Import Graph JSON**, pick any file with **Import Graph JSON from File...**, or switch on
+**Tools → SaintsGraph → Auto Import Graph JSON** to have Unity apply external edits as soon as it
+refreshes. **Copy Graph JSON to Clipboard** goes the other way, handing you an existing graph as
+text.
 
 Nodes carry a stable `uid` alongside the readable `id`, so renaming a node — in the editor or in
 the file — updates it rather than replacing it, and its connections survive.

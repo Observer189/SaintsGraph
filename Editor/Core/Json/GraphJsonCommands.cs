@@ -39,7 +39,7 @@ namespace SaintsGraph.Editor
             return true;
         }
 
-        [MenuItem("Tools/SaintsGraph/Copy Node Schema to Clipboard")]
+        [MenuItem("Tools/SaintsGraph/Copy Node Schema for Tools or LLM")]
         private static void CopySchema()
         {
             string schema = GraphSchema.Export();
@@ -48,7 +48,7 @@ namespace SaintsGraph.Editor
                       "Paste it to a tool or model, then paste the graph JSON it produces into a graph window.");
         }
 
-        [MenuItem("Tools/SaintsGraph/Export Node Schema...")]
+        [MenuItem("Tools/SaintsGraph/Export Node Schema for Tools or LLM...")]
         private static void ExportSchema()
         {
             string path = EditorUtility.SaveFilePanel("Export SaintsGraph node schema",
@@ -95,6 +95,62 @@ namespace SaintsGraph.Editor
 
         [MenuItem("Assets/SaintsGraph/Export Graph JSON", true)]
         private static bool ExportSelectedValidate()
+        {
+            return SelectedGraphs().Any();
+        }
+
+        [MenuItem("Assets/SaintsGraph/Copy Graph JSON to Clipboard")]
+        private static void CopyGraphJson()
+        {
+            NodeGraph graph = SelectedGraphs().FirstOrDefault();
+            if (graph == null)
+            {
+                return;
+            }
+
+            string json = GraphJson.Export(graph);
+            EditorGUIUtility.systemCopyBuffer = json;
+            Debug.Log($"SaintsGraph: '{graph.name}' copied as JSON ({json.Length} chars). " +
+                      "It can be pasted into any graph window with Ctrl+V, or shared as text.", graph);
+        }
+
+        [MenuItem("Assets/SaintsGraph/Copy Graph JSON to Clipboard", true)]
+        private static bool CopyGraphJsonValidate()
+        {
+            return SelectedGraphs().Any();
+        }
+
+        /// <summary>Imports a document that is not named after the asset — e.g. one produced elsewhere.</summary>
+        [MenuItem("Assets/SaintsGraph/Import Graph JSON from File...")]
+        private static void ImportFromFile()
+        {
+            NodeGraph graph = SelectedGraphs().FirstOrDefault();
+            if (graph == null)
+            {
+                return;
+            }
+
+            string path = EditorUtility.OpenFilePanel("Import graph JSON into '" + graph.name + "'",
+                Application.dataPath, "json");
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            try
+            {
+                GraphJson.Import(graph, File.ReadAllText(path));
+                Debug.Log($"SaintsGraph: imported {path} into '{graph.name}'", graph);
+                ReloadOpenWindows(graph);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError($"SaintsGraph: could not import {path} — {exception.Message}", graph);
+            }
+        }
+
+        [MenuItem("Assets/SaintsGraph/Import Graph JSON from File...", true)]
+        private static bool ImportFromFileValidate()
         {
             return SelectedGraphs().Any();
         }

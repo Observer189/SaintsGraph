@@ -96,6 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Pasting something that is not a graph now says so. The node schema in particular is easy to
+  confuse with a graph document, so pasting it explains the difference instead of the Paste
+  command being silently unavailable. Schema menu items are named "for Tools or LLM" to make
+  the distinction obvious.
+- New `Assets → SaintsGraph → Copy Graph JSON to Clipboard` (a graph as pasteable text) and
+  `Import Graph JSON from File...` (import a document that is not named after the asset).
+
 - Node schema no longer lists types from test assemblies (anything referencing NUnit): fixtures
   are not content a generator should be offered.
 - Schema defaults no longer carry `[SerializeReference]` bookkeeping. Managed reference ids are

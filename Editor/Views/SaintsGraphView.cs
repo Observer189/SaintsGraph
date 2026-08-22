@@ -614,11 +614,12 @@ namespace SaintsGraph.Editor
             return nodes.Count == 0 ? string.Empty : GraphJson.Export(graph, nodes);
         }
 
+        // Any JSON object is accepted so that OnPaste can explain what is wrong with it —
+        // a silently disabled Paste command teaches the user nothing.
         private bool OnCanPaste(string data)
         {
             return !string.IsNullOrWhiteSpace(data)
-                   && data.TrimStart().StartsWith("{", StringComparison.Ordinal)
-                   && data.Contains("\"nodes\"");
+                   && data.TrimStart().StartsWith("{", StringComparison.Ordinal);
         }
 
         /// <summary>Where new content should land: the mouse if it has been over the canvas, else its centre.</summary>
@@ -636,6 +637,14 @@ namespace SaintsGraph.Editor
                 && GraphJson.TryGetTopLeft(data, out Vector2 topLeft))
             {
                 offset = MouseInGraphSpace() - topLeft;
+            }
+
+            if (data.Contains("saintsgraph-schema") || data.Contains("\"nodeTypes\""))
+            {
+                Debug.LogWarning("SaintsGraph: that is the node schema, not a graph. The schema describes " +
+                                 "which node types exist — hand it to your tool or model, then paste back the " +
+                                 "graph document it produces (the one with a \"nodes\" array).");
+                return;
             }
 
             List<Node> created;
