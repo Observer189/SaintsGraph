@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -254,33 +255,56 @@ namespace SaintsGraph.Editor
     /// <summary>With auto-export enabled, every saved graph asset refreshes its JSON sidecar.</summary>
     internal class GraphJsonSaveHook : AssetModificationProcessor
     {
+        private static readonly HashSet<string> PendingExports = new HashSet<string>();
+
         private static string[] OnWillSaveAssets(string[] paths)
         {
             if (GraphJsonCommands.AutoExport)
             {
+                // Writing the sidecar from inside the save pipeline leaves it newer on disk
+                // than in the asset database — the worker later reports it as a
+                // "Build asset version error". Queue the export for after the batch instead,
+                // where ImportAsset is allowed and keeps the database in step.
+                bool alreadyScheduled = PendingExports.Count > 0;
                 foreach (string path in paths)
                 {
-                    if (!path.EndsWith(".asset", System.StringComparison.OrdinalIgnoreCase))
+                    if (path.EndsWith(".asset", System.StringComparison.OrdinalIgnoreCase) &&
+                        AssetDatabase.LoadAssetAtPath<NodeGraph>(path) != null)
                     {
-                        continue;
+                        PendingExports.Add(path);
                     }
+                }
 
-                    NodeGraph graph = AssetDatabase.LoadAssetAtPath<NodeGraph>(path);
-                    if (graph != null)
-                    {
-                        try
-                        {
-                            GraphJson.ExportToFile(graph, importAsset: false);
-                        }
-                        catch (System.Exception exception)
-                        {
-                            Debug.LogException(exception);
-                        }
-                    }
+                if (!alreadyScheduled && PendingExports.Count > 0)
+                {
+                    EditorApplication.delayCall += FlushPendingExports;
                 }
             }
 
             return paths;
+        }
+
+        private static void FlushPendingExports()
+        {
+            string[] paths = PendingExports.ToArray();
+            PendingExports.Clear();
+            foreach (string path in paths)
+            {
+                NodeGraph graph = AssetDatabase.LoadAssetAtPath<NodeGraph>(path);
+                if (graph == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    GraphJson.ExportToFile(graph);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+            }
         }
     }
 }

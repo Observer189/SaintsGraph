@@ -171,7 +171,16 @@ namespace SaintsGraph.Editor
                 return;
             }
 
-            File.WriteAllText(path, Export(graph));
+            string json = Export(graph);
+            if (File.Exists(path) && File.ReadAllText(path) == json)
+            {
+                // Unchanged content must not touch the file: every write shifts the on-disk
+                // timestamp, and any timestamp the asset database has not registered comes
+                // back later as a worker "Build asset version error".
+                return;
+            }
+
+            File.WriteAllText(path, json);
             if (importAsset)
             {
                 AssetDatabase.ImportAsset(path);
