@@ -141,9 +141,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Sticky note text could not be edited: an empty note's contents label collapses to zero height,
-  so a double-click landed on the note frame and editing never started. The contents area now
-  fills the note body.
+- Sticky note text could not be edited. GraphView's own StickyNote starts contents editing by
+  showing its text field and hiding the contents label — but in this Unity version that field is
+  a child of the label, so hiding the label hides the editor along with it (the title works only
+  because its field is a sibling). SaintsGraph now drives contents editing itself: the label stays
+  visible with its text blanked while the field inside it is focused, Escape or clicking away
+  commits. The contents area also fills the note body, since an empty label has no height to
+  double-click.
 
 - Collapsing a node no longer leaves edges pointing into empty space: while collapsed,
   connected port pills move into the standard input/output containers next to the title

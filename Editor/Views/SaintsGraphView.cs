@@ -402,21 +402,77 @@ namespace SaintsGraph.Editor
                 userData = note
             };
             view.SetPosition(note.area);
-
-            // An empty note's contents label collapses to zero height, so a double-click lands on
-            // the note frame and text editing never starts. Make it fill the body instead. Inline
-            // styles are used deliberately: a stylesheet rule would lose to the built-in one.
-            Label contents = view.Q<Label>("contents");
-            if (contents != null)
-            {
-                contents.style.flexGrow = 1;
-                contents.style.minHeight = 32;
-                contents.style.whiteSpace = WhiteSpace.Normal;
-            }
-
+            SetUpContentsEditing(view, note);
             view.RegisterCallback<StickyNoteChangeEvent>(_ => SaveNote(view, note));
             AddElement(view);
             _noteViews[note] = view;
+        }
+
+        /// <summary>
+        /// Works around a broken built-in interaction: StickyNote starts contents editing by
+        /// showing "contents-field" and hiding the "contents" label — but in this Unity version
+        /// that field is a *child* of the label, so hiding the label hides the editor with it and
+        /// nothing can be typed. (The title works because its field is a sibling of its label.)
+        /// The double-click is intercepted before the built-in handler and editing is driven here:
+        /// the label stays visible with its text blanked, so the field inside it can be seen.
+        /// Also lets the contents fill the note body, since an empty label has no height to click.
+        /// </summary>
+        private void SetUpContentsEditing(StickyNote view, NodeNote note)
+        {
+            Label label = view.Q<Label>("contents");
+            TextField field = view.Q<TextField>("contents-field");
+            if (label == null || field == null)
+            {
+                return;
+            }
+
+            label.style.flexGrow = 1;
+            label.style.minHeight = 32;
+            label.style.whiteSpace = WhiteSpace.Normal;
+            field.multiline = true;
+            field.style.flexGrow = 1;
+
+            label.RegisterCallback<MouseDownEvent>(evt =>
+            {
+                if (evt.button != 0 || evt.clickCount != 2
+                    || field.style.display == DisplayStyle.Flex)
+                {
+                    return;
+                }
+
+                evt.StopImmediatePropagation();
+
+                field.SetValueWithoutNotify(note.text ?? "");
+                field.style.display = DisplayStyle.Flex;
+                label.text = string.Empty;
+
+                VisualElement input = field.Q(TextField.textInputUssName);
+                input?.Focus();
+                field.SelectAll();
+            }, TrickleDown.TrickleDown);
+
+            field.RegisterCallback<FocusOutEvent>(_ => EndContentsEditing(view, label, field, note));
+            field.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                {
+                    EndContentsEditing(view, label, field, note);
+                    evt.StopPropagation();
+                }
+            });
+        }
+
+        private void EndContentsEditing(StickyNote view, Label label, TextField field, NodeNote note)
+        {
+            if (field.style.display != DisplayStyle.Flex)
+            {
+                return;
+            }
+
+            field.style.display = DisplayStyle.None;
+            view.contents = field.value;
+            label.text = field.value;
+            SaveNote(view, note);
         }
 
         private void SaveNote(StickyNote view, NodeNote note)
